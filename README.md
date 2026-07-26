@@ -40,28 +40,42 @@ Sistema web para gerenciamento e atendimento de chamados de suporte técnico da 
 ```text
 helpdesk_prefeitura/
 │
-├── account/                # Módulo de Autenticação
-│   ├── login.php           # Tela de Login
-│   └── logout.php          # Encerramento de Sessão
+├── account/                    # Módulo de Autenticação e Entrada
+│   ├── autocadastro.php        # Cadastro de Novos Usuários
+│   ├── esqueci_senha.php        # Recuperação de Senha por Telefone
+│   ├── login.php               # Tela de Login Principal
+│   ├── logout.php              # Encerramento de Sessão
+│   └── painel.php              # Painel Principal (Dashboard Adaptativo)
 │
-├── config/                 # Configurações do Sistema
-│   └── conexao.php         # Conexão PDO com o Banco de Dados
+├── admin/                      # Módulo Exclusivo do Administrador
+│   ├── gerenciar_setores.php   # Gestão de Secretarias e Setores
+│   └── gerenciar_tecnicos.php  # Gestão de Técnicos e Permissões
 │
-├── includes/               # Componentes Reutilizáveis
-│   ├── cards_admin.php     # Dashboard do Administrador
-│   ├── cards_tecnico.php   # Dashboard do Técnico
-│   └── cards_usuario.php   # Dashboard do Usuário
+├── assets/                     # Arquivos Estáticos e Mídia
+│   └── img/
+│       └── brasao.png          # Logomarca / Brasão Oficial da Prefeitura
 │
-├── suporte/                # Módulo de Atendimento (Técnicos / Admin)
-│   ├── fila_chamados.php   # Fila Geral de Chamados
-│   └── ver_chamado.php    # Atendimento e Atualização do Chamado
+├── config/                     # Configurações de Infraestrutura
+│   └── conexao.php             # Conexão PDO com Banco de Dados MySQL
 │
-├── usuario/                # Módulo do Solicitante
-│   ├── abrir_chamado.php   # Formulário de Novo Chamado
-│   ├── meus_chamados.php   # Listagem dos Chamados do Usuário
-│   └── ver_chamado.php    # Acompanhamento e Respostas do Usuário
+├── includes/                   # Componentes Reutilizáveis (Cards/Widgets)
+│   ├── cards_admin.php         # Indicadores do Administrador
+│   ├── cards_tecnico.php       # Indicadores do Técnico
+│   └── cards_usuario.php       # Indicadores do Solicitante
 │
-├── index.php               # Redirecionador Inicial
-├── painel.php              # Painel Principal (Dashboard adaptativo por perfil)
-├── perfil.php              # Edição de Perfil do Usuário Logado
-└── README.md               # Documentação do Projeto
+├── suporte/                    # Módulo de Atendimento (Técnicos / Admin)
+│   ├── fila_chamados.php       # Fila Geral com Ordenação de Chamados
+│   └── ver_chamado.php        # Atendimento, Respostas e Troca de Status
+│
+├── usuario/                    # Módulo do Solicitante (Servidor/Munícipe)
+│   ├── abrir_chamado.php       # Formulário de Abertura de Chamado
+│   ├── meus_chamados.php       # Listagem e Status dos Chamados Próprios
+│   └── ver_chamado.php        # Acompanhamento e Envio de Réplica
+│
+├── estrutura.txt               # Mapeamento Gerado da Estrutura de Pastas
+├── gerar_admin.php             # Script Utilitário para Criar Conta Admin
+├── helpdesk_prefeitura.sql     # Script do Banco de Dados MySQL
+├── Help_TI_Borborema.vbs       # Script para Criar Atalho na Área de Trabalho
+├── index.php                   # Redirecionador Inicial da Aplicação
+├── perfil.php                  # Edição de Dados do Usuário Logado
+└── README.md                   # Documentação Completa do Projeto
