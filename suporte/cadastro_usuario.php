@@ -136,10 +136,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 5. CONSULTAS DE DADOS (SETORES E USUÁRIOS)
 // -------------------------------------------------------------
 try {
-   /* // Busca setores para o select
+    // Busca setores para o select
     $stmtSetores = $pdo->query("SELECT id, nome FROM secretarias_setores ORDER BY nome ASC");
     $setores = $stmtSetores->fetchAll(PDO::FETCH_ASSOC);
-
+    
+    /*
     // Busca todos os usuários cadastrados com o nome do seu respectivo setor
     $sqlUsuarios = "SELECT u.id, u.nome, u.email, u.telefone, u.perfil, s.nome AS setor_nome 
                     FROM usuarios u 
