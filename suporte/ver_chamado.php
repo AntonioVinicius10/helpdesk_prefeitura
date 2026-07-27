@@ -9,35 +9,41 @@ if (!isset($_SESSION['usuario_id']) || !in_array($_SESSION['usuario_perfil'], ['
 }
 
 $chamado_id = (int)($_GET['id'] ?? 0);
-$mensagemSucesso = '';
-$mensagemErro = '';
-
 if ($chamado_id <= 0) {
     header("Location: fila_chamados.php");
     exit;
 }
 
-// 2. PROCESSAR ALTERAÇÃO DE STATUS
+// ===== LIMPAR MENSAGENS FLASH ANTIGAS =====
+$mensagemSucesso = $_SESSION['flash_sucesso'] ?? '';
+$mensagemErro    = $_SESSION['flash_erro'] ?? '';
+unset($_SESSION['flash_sucesso'], $_SESSION['flash_erro']);
+
+// ===== PROCESSAR ALTERAÇÃO DE STATUS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'atualizar_status') {
     $novo_status = $_POST['status'] ?? '';
     if (in_array($novo_status, ['aberto', 'em_andamento', 'resolvido'])) {
         try {
             $stmtUpdate = $pdo->prepare("UPDATE chamados SET status = :status WHERE id = :id");
             $stmtUpdate->execute(['status' => $novo_status, 'id' => $chamado_id]);
-            $mensagemSucesso = "Status do chamado atualizado com sucesso!";
+            $_SESSION['flash_sucesso'] = "Status do chamado atualizado com sucesso!";
         } catch (PDOException $e) {
-            $mensagemErro = "Erro ao atualizar status: " . $e->getMessage();
+            $_SESSION['flash_erro'] = "Erro ao atualizar status: " . $e->getMessage();
         }
+    } else {
+        $_SESSION['flash_erro'] = "Status inválido.";
     }
+    header("Location: ver_chamado.php?id=" . $chamado_id);
+    exit;
 }
 
-// 3. PROCESSAR NOVA RESPOSTA / INTERAÇÃO
+// ===== PROCESSAR NOVA RESPOSTA =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'enviar_resposta') {
     $resposta = trim($_POST['resposta'] ?? '');
     $usuario_id = $_SESSION['usuario_id'];
 
     if (empty($resposta)) {
-        $mensagemErro = "Escreva uma resposta antes de enviar.";
+        $_SESSION['flash_erro'] = "Escreva uma resposta antes de enviar.";
     } else {
         try {
             $sqlResp = "INSERT INTO chamados_respostas (chamado_id, usuario_id, mensagem, criado_em) 
@@ -48,14 +54,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                 'usuario_id' => $usuario_id,
                 'mensagem'   => $resposta
             ]);
-            $mensagemSucesso = "Resposta enviada com sucesso!";
+            $_SESSION['flash_sucesso'] = "Resposta enviada com sucesso!";
         } catch (PDOException $e) {
-            $mensagemErro = "Erro ao salvar resposta. Verifique se a tabela 'chamados_respostas' existe no banco.";
+            $_SESSION['flash_erro'] = "Erro ao salvar resposta. Verifique se a tabela 'chamados_respostas' existe.";
         }
     }
+    header("Location: ver_chamado.php?id=" . $chamado_id);
+    exit;
 }
 
-// 4. BUSCAR DADOS DETALHADOS DO CHAMADO
+// ===== BUSCAR DADOS DO CHAMADO =====
 try {
     $sql = "SELECT 
                 c.*, 
@@ -70,7 +78,6 @@ try {
             LEFT JOIN secretarias_setores s ON u.setor_id = s.id
             LEFT JOIN categorias cat ON c.categoria_id = cat.id
             WHERE c.id = :id";
-            
     $stmt = $pdo->prepare($sql);
     $stmt->execute(['id' => $chamado_id]);
     $chamado = $stmt->fetch();
@@ -80,10 +87,12 @@ try {
         exit;
     }
 } catch (PDOException $e) {
-    die("Erro ao carregar detalhes do chamado: " . $e->getMessage());
+    $_SESSION['flash_erro'] = "Erro ao carregar detalhes: " . $e->getMessage();
+    header("Location: fila_chamados.php");
+    exit;
 }
 
-// 5. BUSCAR HISTÓRICO DE RESPOSTAS DO CHAMADO
+// ===== BUSCAR RESPOSTAS =====
 $respostas = [];
 try {
     $sqlRespostas = "SELECT r.*, u.nome AS autor_nome, u.perfil AS autor_perfil 
@@ -95,7 +104,7 @@ try {
     $stmtR->execute(['chamado_id' => $chamado_id]);
     $respostas = $stmtR->fetchAll();
 } catch (PDOException $e) {
-    // Tabela de respostas pode ainda não ter sido criada
+    // Tabela pode não existir, ignoramos silenciosamente
 }
 ?>
 <!DOCTYPE html>
@@ -108,125 +117,124 @@ try {
 </head>
 <body class="bg-light">
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/helpdesk_prefeitura/painel.php"> TI Prefeitura de Borborema</a>
-            <div class="d-flex align-items-center text-white">
-                <a href="fila_chamados.php" class="btn btn-outline-light btn-sm me-2">Voltar à Fila</a>
-                <a href="/helpdesk_prefeitura/account/logout.php" class="btn btn-outline-danger btn-sm">Sair</a>
-            </div>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="/helpdesk_prefeitura/painel.php">TI Prefeitura de Borborema</a>
+        <div class="d-flex align-items-center text-white">
+            <a href="fila_chamados.php" class="btn btn-outline-light btn-sm me-2">Voltar à Fila</a>
+            <a href="/helpdesk_prefeitura/account/logout.php" class="btn btn-outline-danger btn-sm">Sair</a>
         </div>
-    </nav>
+    </div>
+</nav>
 
-    <div class="container mt-4 mb-5">
+<div class="container mt-4 mb-5">
 
-        <?php if (!empty($mensagemErro)): ?>
-            <div class="alert alert-danger py-2"><?= htmlspecialchars($mensagemErro) ?></div>
-        <?php endif; ?>
+    <?php if (!empty($mensagemErro)): ?>
+        <div class="alert alert-danger py-2"><?= htmlspecialchars($mensagemErro) ?></div>
+    <?php endif; ?>
 
-        <?php if (!empty($mensagemSucesso)): ?>
-            <div class="alert alert-success py-2"><?= htmlspecialchars($mensagemSucesso) ?></div>
-        <?php endif; ?>
+    <?php if (!empty($mensagemSucesso)): ?>
+        <div class="alert alert-success py-2"><?= htmlspecialchars($mensagemSucesso) ?></div>
+    <?php endif; ?>
 
-        <div class="row g-4">
+    <div class="row g-4">
+        
+        <div class="col-lg-8">
             
-            <div class="col-lg-8">
-                
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Protocolo: <?= htmlspecialchars($chamado['protocolo'] ?? '#'.$chamado['id']) ?></h5>
-                        <small><?= date('d/m/Y H:i', strtotime($chamado['criado_em'])) ?></small>
-                    </div>
-                    <div class="card-body">
-                        <h4 class="card-title text-primary"><?= htmlspecialchars($chamado['titulo']) ?></h4>
-                        <p class="text-muted small">Categoria: <strong><?= htmlspecialchars($chamado['categoria_nome'] ?? 'Geral') ?></strong></p>
-                        <hr>
-                        <h6><strong>Descrição do Problema:</strong></h6>
-                        <div class="bg-light p-3 rounded border mb-3">
-                            <?= nl2br(htmlspecialchars($chamado['descricao'])) ?>
-                        </div>
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Protocolo: <?= htmlspecialchars($chamado['protocolo'] ?? '#'.$chamado['id']) ?></h5>
+                    <small><?= date('d/m/Y H:i', strtotime($chamado['criado_em'])) ?></small>
+                </div>
+                <div class="card-body">
+                    <h4 class="card-title text-primary"><?= htmlspecialchars($chamado['titulo']) ?></h4>
+                    <p class="text-muted small">Categoria: <strong><?= htmlspecialchars($chamado['categoria_nome'] ?? 'Geral') ?></strong></p>
+                    <hr>
+                    <h6><strong>Descrição do Problema:</strong></h6>
+                    <div class="bg-light p-3 rounded border mb-3">
+                        <?= nl2br(htmlspecialchars($chamado['descricao'])) ?>
                     </div>
                 </div>
-
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-secondary text-white">
-                        <h6 class="mb-0">Histórico de Interações / Respostas</h6>
-                    </div>
-                    <div class="card-body">
-                        <?php if (count($respostas) > 0): ?>
-                            <?php foreach ($respostas as $resp): ?>
-                                <div class="border-bottom pb-2 mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <strong><?= htmlspecialchars($resp['autor_nome']) ?> 
-                                            <span class="badge bg-info text-dark ms-1"><?= strtoupper($resp['autor_perfil']) ?></span>
-                                        </strong>
-                                        <small class="text-muted"><?= date('d/m/Y H:i', strtotime($resp['criado_em'])) ?></small>
-                                    </div>
-                                    <p class="mb-0 text-secondary"><?= nl2br(htmlspecialchars($resp['mensagem'])) ?></p>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p class="text-muted small mb-0">Nenhuma resposta registrada até o momento.</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div class="card shadow-sm">
-                    <div class="card-header bg-primary text-white">
-                        <h6 class="mb-0">Responder Chamado Por Escrito</h6>
-                    </div>
-                    <div class="card-body">
-                        <form action="ver_chamado.php?id=<?= $chamado_id ?>" method="POST">
-                            <input type="hidden" name="acao" value="enviar_resposta">
-                            <div class="mb-3">
-                                <textarea name="resposta" class="form-control" rows="4" required placeholder="Digite sua resposta, orientação ou parecer técnico aqui..."></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Enviar Resposta</button>
-                        </form>
-                    </div>
-                </div>
-
             </div>
 
-            <div class="col-lg-4">
-                
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-dark text-white">
-                        <h6 class="mb-0">Situação / Status</h6>
-                    </div>
-                    <div class="card-body">
-                        <form action="ver_chamado.php?id=<?= $chamado_id ?>" method="POST">
-                            <input type="hidden" name="acao" value="atualizar_status">
-                            <div class="mb-3">
-                                <label for="status" class="form-label">Mudar Status para:</label>
-                                <select name="status" id="status" class="form-select fw-bold">
-                                    <option value="aberto" <?= $chamado['status'] === 'aberto' ? 'selected' : '' ?>>🔵 Aberto</option>
-                                    <option value="em_andamento" <?= $chamado['status'] === 'em_andamento' ? 'selected' : '' ?>>🟡 Em Andamento</option>
-                                    <option value="resolvido" <?= $chamado['status'] === 'resolvido' ? 'selected' : '' ?>>🟢 Fechado</option>
-                                </select>
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">Histórico de Interações</h6>
+                </div>
+                <div class="card-body">
+                    <?php if (count($respostas) > 0): ?>
+                        <?php foreach ($respostas as $resp): ?>
+                            <div class="border-bottom pb-2 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong><?= htmlspecialchars($resp['autor_nome']) ?> 
+                                        <span class="badge bg-info text-dark ms-1"><?= strtoupper($resp['autor_perfil']) ?></span>
+                                    </strong>
+                                    <small class="text-muted"><?= date('d/m/Y H:i', strtotime($resp['criado_em'])) ?></small>
+                                </div>
+                                <p class="mb-0 text-secondary"><?= nl2br(htmlspecialchars($resp['mensagem'])) ?></p>
                             </div>
-                            <button type="submit" class="btn btn-dark w-100">Atualizar Status</button>
-                        </form>
-                    </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="text-muted small mb-0">Nenhuma resposta registrada.</p>
+                    <?php endif; ?>
                 </div>
+            </div>
 
-                <div class="card shadow-sm">
-                    <div class="card-header bg-secondary text-white">
-                        <h6 class="mb-0">Dados do Solicitante</h6>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-1"><strong>Nome:</strong> <?= htmlspecialchars($chamado['solicitante_nome']) ?></p>
-                        <p class="mb-1"><strong>Setor:</strong> <?= htmlspecialchars($chamado['setor_nome'] ?? 'N/I') ?> (<?= htmlspecialchars($chamado['setor_sigla'] ?? '-') ?>)</p>
-                        <p class="mb-1"><strong>E-mail:</strong> <?= htmlspecialchars($chamado['solicitante_email']) ?></p>
-                        <p class="mb-0"><strong>WhatsApp:</strong> <?= htmlspecialchars($chamado['solicitante_telefone'] ?? 'Não informado') ?></p>
-                    </div>
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">Responder Chamado</h6>
                 </div>
+                <div class="card-body">
+                    <form action="ver_chamado.php?id=<?= $chamado_id ?>" method="POST">
+                        <input type="hidden" name="acao" value="enviar_resposta">
+                        <div class="mb-3">
+                            <textarea name="resposta" class="form-control" rows="4" required placeholder="Digite sua resposta, orientação ou parecer técnico..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Enviar Resposta</button>
+                    </form>
+                </div>
+            </div>
 
+        </div>
+
+        <div class="col-lg-4">
+            
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h6 class="mb-0">Situação / Status</h6>
+                </div>
+                <div class="card-body">
+                    <form action="ver_chamado.php?id=<?= $chamado_id ?>" method="POST">
+                        <input type="hidden" name="acao" value="atualizar_status">
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Mudar Status para:</label>
+                            <select name="status" id="status" class="form-select fw-bold">
+                                <option value="aberto" <?= $chamado['status'] === 'aberto' ? 'selected' : '' ?>>🔵 Aberto</option>
+                                <option value="em_andamento" <?= $chamado['status'] === 'em_andamento' ? 'selected' : '' ?>>🟡 Em Andamento</option>
+                                <option value="resolvido" <?= $chamado['status'] === 'resolvido' ? 'selected' : '' ?>>🟢 Fechado</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100">Atualizar Status</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">Dados do Solicitante</h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>Nome:</strong> <?= htmlspecialchars($chamado['solicitante_nome']) ?></p>
+                    <p class="mb-1"><strong>Setor:</strong> <?= htmlspecialchars($chamado['setor_nome'] ?? 'N/I') ?> (<?= htmlspecialchars($chamado['setor_sigla'] ?? '-') ?>)</p>
+                    <p class="mb-1"><strong>E-mail:</strong> <?= htmlspecialchars($chamado['solicitante_email']) ?></p>
+                    <p class="mb-0"><strong>WhatsApp:</strong> <?= htmlspecialchars($chamado['solicitante_telefone'] ?? 'Não informado') ?></p>
+                </div>
             </div>
 
         </div>
 
     </div>
 
+</div>
 </body>
 </html>

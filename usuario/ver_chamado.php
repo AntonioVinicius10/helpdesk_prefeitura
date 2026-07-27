@@ -10,8 +10,11 @@ if (!isset($_SESSION['usuario_id'])) {
 
 $usuario_id = $_SESSION['usuario_id'];
 $chamado_id = (int)($_GET['id'] ?? 0);
-$mensagemSucesso = '';
-$mensagemErro = '';
+
+// ===== LIMPAR MENSAGENS FLASH =====
+$mensagemSucesso = $_SESSION['flash_sucesso'] ?? '';
+$mensagemErro    = $_SESSION['flash_erro'] ?? '';
+unset($_SESSION['flash_sucesso'], $_SESSION['flash_erro']);
 
 if ($chamado_id <= 0) {
     header("Location: meus_chamados.php");
@@ -23,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     $resposta = trim($_POST['resposta'] ?? '');
 
     if (empty($resposta)) {
-        $mensagemErro = "Escreva uma mensagem antes de enviar.";
+        $_SESSION['flash_erro'] = "Escreva uma mensagem antes de enviar.";
     } else {
         try {
             $sqlResp = "INSERT INTO chamados_respostas (chamado_id, usuario_id, mensagem, criado_em) 
@@ -34,11 +37,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
                 'usuario_id' => $usuario_id,
                 'mensagem'   => $resposta
             ]);
-            $mensagemSucesso = "Mensagem enviada ao suporte com sucesso!";
+            $_SESSION['flash_sucesso'] = "Mensagem enviada ao suporte com sucesso!";
         } catch (PDOException $e) {
-            $mensagemErro = "Erro ao enviar resposta: " . $e->getMessage();
+            $_SESSION['flash_erro'] = "Erro ao enviar resposta: " . $e->getMessage();
         }
     }
+    // Redireciona para evitar reenvio ao recarregar
+    header("Location: ver_chamado.php?id=" . $chamado_id);
+    exit;
 }
 
 // 3. BUSCAR O CHAMADO (GARANTINDO QUE É DO PRÓPRIO USUÁRIO)
@@ -55,12 +61,13 @@ try {
     $chamado = $stmt->fetch();
 
     if (!$chamado) {
-        // Se o chamado não existir ou não for desse usuário, redireciona
         header("Location: meus_chamados.php");
         exit;
     }
 } catch (PDOException $e) {
-    die("Erro ao carregar detalhes do chamado.");
+    $_SESSION['flash_erro'] = "Erro ao carregar detalhes do chamado.";
+    header("Location: meus_chamados.php");
+    exit;
 }
 
 // 4. BUSCAR RESPOSTAS DO SUPORTE / USUÁRIO
