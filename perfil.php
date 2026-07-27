@@ -168,7 +168,7 @@ try {
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center mt-3">
-                        <a href="/helpdesk_prefeitura/painel.php" class="btn btn-secondary">Voltar</a>
+                        <a href="/helpdesk_prefeitura/account/painel.php" class="btn btn-secondary">Voltar</a>
                         <button type="submit" class="btn btn-primary px-4">Salvar Alterações</button>
                     </div>
 

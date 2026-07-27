@@ -40,4 +40,22 @@
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger">
+            <div class="card-body">
+                <h5 class="card-title">Cadastrar Usuários</h5>
+                <p class="card-text">Se precisar cadastre que vai usar o sistema.</p>
+             <a href="/helpdesk_prefeitura/suporte/cadastro_usuario.php" class="btn btn-danger btn-sm">cadastrar usuarios</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger">
+            <div class="card-body">
+                <h5 class="card-title">Cadastrar Problemas</h5>
+                <p class="card-text">Cadastre possíveis problemas.</p>
+             <a href="/helpdesk_prefeitura/suporte/cadastro_problemas.php" class="btn btn-danger btn-sm">cadastrar Problemas</a>
+            </div>
+        </div>
+    </div>
 </div>
