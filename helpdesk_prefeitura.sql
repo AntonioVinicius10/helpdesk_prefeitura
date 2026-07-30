@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 26-Jul-2026 às 00:00
+-- Tempo de geração: 30-Jul-2026 às 17:09
 -- Versão do servidor: 10.4.11-MariaDB
 -- versão do PHP: 7.4.1
 
@@ -87,6 +87,40 @@ CREATE TABLE `chamados_respostas` (
 -- --------------------------------------------------------
 
 --
+-- Estrutura da tabela `dispositivos`
+--
+
+CREATE TABLE `dispositivos` (
+  `id` int(11) NOT NULL,
+  `hostname` varchar(100) NOT NULL,
+  `cpu_modelo` varchar(150) DEFAULT NULL,
+  `gpu_modelo` varchar(150) DEFAULT NULL,
+  `ram_total_mb` int(11) NOT NULL,
+  `usuario_id` int(11) DEFAULT NULL COMMENT 'Usuário principal ou dono do dispositivo',
+  `setor_id` int(11) DEFAULT NULL COMMENT 'Setor onde o PC está alocado',
+  `setor_nome` varchar(100) DEFAULT NULL,
+  `primeiro_acesso` timestamp NOT NULL DEFAULT current_timestamp(),
+  `ultimo_acesso` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+
+--
+-- Estrutura da tabela `dispositivos_telemetria`
+--
+
+CREATE TABLE `dispositivos_telemetria` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `dispositivo_id` int(11) NOT NULL,
+  `ram_livre_mb` int(11) NOT NULL,
+  `disco_livre_gb` int(11) DEFAULT NULL,
+  `alertas` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Ex: ["CRITICAL_LOW_RAM", "CRITICAL_LOW_DISK"]' CHECK (json_valid(`alertas`)),
+  `criado_em` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+
+--
 -- Estrutura da tabela `interacoes_chamado`
 --
 
@@ -119,9 +153,9 @@ CREATE TABLE `secretarias_setores` (
 INSERT INTO `secretarias_setores` (`id`, `nome`, `sigla`, `ativo`, `criado_em`) VALUES
 (1, 'Secretaria de Administração e TI', 'TI', 1, '2026-07-23 02:36:02'),
 (2, 'Secretaria de Educação', 'SEDUC', 1, '2026-07-23 02:36:02'),
-(3, 'Secretaria de Saúde', 'SMS', 1, '2026-07-23 02:36:02'),
-(4, 'Secretaria de Obras e Serviços', 'SEMOS', 1, '2026-07-23 02:36:02'),
-(5, 'TI prefeitura de Borborema', 'TEC TI', 1, '2026-07-24 23:08:40');
+(5, 'TI prefeitura de Borborema', 'TEC TI', 1, '2026-07-24 23:08:40'),
+(6, 'Almoxarifado borbo', 'AM', 1, '2026-07-27 16:30:20'),
+(7, 'obras e postura', 'OP', 1, '2026-07-27 17:42:54');
 
 -- --------------------------------------------------------
 
@@ -179,6 +213,24 @@ ALTER TABLE `chamados_respostas`
   ADD KEY `usuario_id` (`usuario_id`);
 
 --
+-- Índices para tabela `dispositivos`
+--
+ALTER TABLE `dispositivos`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uk_hostname` (`hostname`),
+  ADD KEY `idx_usuario_id` (`usuario_id`),
+  ADD KEY `idx_setor_id` (`setor_id`);
+
+--
+-- Índices para tabela `dispositivos_telemetria`
+--
+ALTER TABLE `dispositivos_telemetria`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `dispositivo_id` (`dispositivo_id`),
+  ADD KEY `idx_dispositivo_data` (`dispositivo_id`,`criado_em`),
+  ADD KEY `idx_criado_em` (`criado_em`);
+
+--
 -- Índices para tabela `interacoes_chamado`
 --
 ALTER TABLE `interacoes_chamado`
@@ -215,13 +267,25 @@ ALTER TABLE `categorias`
 -- AUTO_INCREMENT de tabela `chamados`
 --
 ALTER TABLE `chamados`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT de tabela `chamados_respostas`
 --
 ALTER TABLE `chamados_respostas`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+
+--
+-- AUTO_INCREMENT de tabela `dispositivos`
+--
+ALTER TABLE `dispositivos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=101;
+
+--
+-- AUTO_INCREMENT de tabela `dispositivos_telemetria`
+--
+ALTER TABLE `dispositivos_telemetria`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=62;
 
 --
 -- AUTO_INCREMENT de tabela `interacoes_chamado`
@@ -233,13 +297,13 @@ ALTER TABLE `interacoes_chamado`
 -- AUTO_INCREMENT de tabela `secretarias_setores`
 --
 ALTER TABLE `secretarias_setores`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT de tabela `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- Restrições para despejos de tabelas
@@ -259,6 +323,19 @@ ALTER TABLE `chamados`
 ALTER TABLE `chamados_respostas`
   ADD CONSTRAINT `chamados_respostas_ibfk_1` FOREIGN KEY (`chamado_id`) REFERENCES `chamados` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `chamados_respostas_ibfk_2` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE;
+
+--
+-- Limitadores para a tabela `dispositivos`
+--
+ALTER TABLE `dispositivos`
+  ADD CONSTRAINT `fk_dispositivos_setores` FOREIGN KEY (`setor_id`) REFERENCES `secretarias_setores` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_dispositivos_usuarios` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL;
+
+--
+-- Limitadores para a tabela `dispositivos_telemetria`
+--
+ALTER TABLE `dispositivos_telemetria`
+  ADD CONSTRAINT `fk_telemetria_dispositivos` FOREIGN KEY (`dispositivo_id`) REFERENCES `dispositivos` (`id`) ON DELETE CASCADE;
 
 --
 -- Limitadores para a tabela `interacoes_chamado`

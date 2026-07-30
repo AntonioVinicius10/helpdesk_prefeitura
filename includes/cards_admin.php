@@ -58,4 +58,13 @@
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger">
+            <div class="card-body">
+                <h5 class="card-title">Pagé</h5>
+                <p class="card-text">Moniore computadores com o Page</p>
+             <a href="/helpdesk_prefeitura/admin/dispositivos.php" class="btn btn-danger btn-sm">Entrar no Pagé</a>
+            </div>
+        </div>
+    </div>
 </div>
