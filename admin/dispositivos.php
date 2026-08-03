@@ -1,18 +1,33 @@
 <?php
-// 1. Corrige o fuso horário (com a barra)
+// 1. Corrige o fuso horário
 date_default_timezone_set('America/Sao_Paulo');
 
 require_once __DIR__ . '/../config/conexao.php';
 
 try {
-    // 2. O MySQL calcula a diferença exata em segundos entre a telemetria e o horário atual
+    // 2. Consulta MySQL incluindo os novos campos no estilo CPU-Z
     $sql = "
         SELECT 
             d.id,
             d.hostname,
+            d.ip_local,
+            d.mac_address,
+            d.os_nome,
             d.cpu_modelo,
+            d.cpu_cores,
+            d.cpu_threads,
+            d.cpu_clock_mhz,
+            d.cpu_socket,
+            d.mobo_fabricante,
+            d.mobo_modelo,
+            d.bios_versao,
             d.gpu_modelo,
+            d.gpu_vram_mb,
             d.ram_total_mb,
+            d.ram_tipo,
+            d.ram_clock_mhz,
+            d.ram_pentes,
+            d.disco_total_gb,
             d.ultimo_acesso,
             TIMESTAMPDIFF(SECOND, d.ultimo_acesso, NOW()) AS segundos_desde_ultimo_acesso,
             s.nome AS setor_nome,
@@ -41,14 +56,10 @@ try {
 $dispositivos = [];
 
 foreach ($dispositivosBanco as $d) {
-    // Pega a diferença em segundos calculada pelo MySQL
     $diferencaSegundos = (int) ($d['segundos_desde_ultimo_acesso'] ?? 99999);
-
-    // Decodifica o JSON de alertas do agente
     $alertasArray = !empty($d['alertas']) ? json_decode($d['alertas'], true) : [];
 
-    // REGRA DE STATUS:
-    // Se passou mais de 180 segundos (3 minutos) sem sinal -> Offline
+    // REGRA DE STATUS: Offline se passar de 180s (3 minutos)
     if ($diferencaSegundos > 180) {
         $status = 'offline';
     } elseif (!empty($alertasArray)) {
@@ -75,17 +86,44 @@ foreach ($dispositivosBanco as $d) {
         'hostname'          => $d['hostname'],
         'status'            => $status,
         'setor'             => $d['setor_nome'] ?? 'Setor Não Atribuído',
+        'ip_local'          => $d['ip_local'] ?: 'N/A',
+        'mac_address'       => $d['mac_address'] ?: 'N/A',
+        'os_nome'           => $d['os_nome'] ?: 'Windows OS',
+        
+        // Dados de CPU
         'cpu_modelo'        => $d['cpu_modelo'] ?: 'Desconhecido',
+        'cpu_cores'         => $d['cpu_cores'] ?: 0,
+        'cpu_threads'       => $d['cpu_threads'] ?: 0,
+        'cpu_clock'         => $d['cpu_clock_mhz'] ? $d['cpu_clock_mhz'] . ' MHz' : 'N/A',
+        'cpu_socket'        => $d['cpu_socket'] ?: 'N/A',
+        
+        // Dados de Placa-Mãe
+        'mobo_fabricante'   => $d['mobo_fabricante'] ?: 'Desconhecido',
+        'mobo_modelo'       => $d['mobo_modelo'] ?: 'Desconhecido',
+        'bios_versao'       => $d['bios_versao'] ?: 'N/A',
+
+        // Dados de GPU
+        'gpu_modelo'        => $d['gpu_modelo'] ?: 'Integrada/Desconhecida',
+        'gpu_vram'          => $d['gpu_vram_mb'] ? round($d['gpu_vram_mb'] / 1024, 1) . ' GB' : 'N/A',
+
+        // Dados de RAM
         'ram_total'         => round($d['ram_total_mb'] / 1024, 1) . ' GB',
         'ram_uso'           => $ramUsoPorcentagem,
-        'disco'             => ($d['disco_livre_gb'] !== null) ? $d['disco_livre_gb'] . ' GB Livres no C:' : 'Não informado',
+        'ram_tipo'          => $d['ram_tipo'] ?: 'DDR',
+        'ram_clock'         => $d['ram_clock_mhz'] ? $d['ram_clock_mhz'] . ' MHz' : 'N/A',
+        'ram_pentes'        => $d['ram_pentes'] ?: 1,
+
+        // Dados de Disco
+        'disco_total'       => $d['disco_total_gb'] ? $d['disco_total_gb'] . ' GB' : 'N/A',
+        'disco_livre'       => ($d['disco_livre_gb'] !== null) ? $d['disco_livre_gb'] . ' GB' : 'N/A',
+
         'uptime'            => $uptimeTexto,
         'ultima_manutencao' => date('d/m/Y H:i', strtotime($d['ultimo_acesso'])),
         'alertas'           => $alertasArray
     ];
 }
 
-// 3. Contadores para as caixas de resumo no topo da tela (Corrigindo as variáveis ausentes)
+// 3. Contadores para o topo da tela
 $total_pcs   = count($dispositivos);
 $online_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'online'));
 $offline_pcs = count(array_filter($dispositivos, fn($d) => $d['status'] === 'offline'));
@@ -118,22 +156,42 @@ $alerta_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'ale
 </head>
 <body class="bg-darkbg text-slate-100 min-h-screen font-sans antialiased pb-12">
 
-    <?php 
-    include __DIR__ . '/../includes/components/card_dispositivo.php';
-?>
+    <?php include __DIR__ . '/../includes/components/card_dispositivo.php'; ?>
 
     <script>
         let filtroAtual = 'todos';
 
         function abrirModal(pc) {
+            // Header Modal
             document.getElementById('modalHostname').innerText = pc.hostname;
             document.getElementById('modalStatus').innerText = 'Status: ' + pc.status.toUpperCase() + ' - ' + pc.uptime;
+            
+            // Especificações da CPU
             document.getElementById('modalCpu').innerText = pc.cpu_modelo;
-            document.getElementById('modalRam').innerText = pc.ram_total + ' (' + pc.ram_uso + '% em uso)';
-            document.getElementById('modalDisco').innerText = pc.disco;
+            document.getElementById('modalCpuDetalhes').innerText = pc.cpu_cores + ' Cores / ' + pc.cpu_threads + ' Threads | Clock: ' + pc.cpu_clock + ' | Soquete: ' + pc.cpu_socket;
+
+            // Especificações da Placa-Mãe
+            document.getElementById('modalMobo').innerText = pc.mobo_fabricante + ' - ' + pc.mobo_modelo;
+            document.getElementById('modalBios').innerText = 'BIOS: ' + pc.bios_versao;
+
+            // Especificações da Memória RAM
+            document.getElementById('modalRam').innerText = pc.ram_total + ' ' + pc.ram_tipo + ' (' + pc.ram_uso + '% em uso)';
+            document.getElementById('modalRamDetalhes').innerText = pc.ram_pentes + ' Pente(s) | Frequência: ' + pc.ram_clock;
+
+            // Placa de Vídeo
+            document.getElementById('modalGpu').innerText = pc.gpu_modelo + (pc.gpu_vram !== 'N/A' ? ' (' + pc.gpu_vram + ' VRAM)' : '');
+
+            // Armazenamento
+            document.getElementById('modalDisco').innerText = pc.disco_livre + ' livres de ' + pc.disco_total + ' no C:';
+
+            // Sistema Operacional e Rede
             document.getElementById('modalSetor').innerText = pc.setor;
+            document.getElementById('modalOs').innerText = pc.os_nome;
+            document.getElementById('modalIp').innerText = pc.ip_local;
+            document.getElementById('modalMac').innerText = pc.mac_address;
             document.getElementById('modalManutencao').innerText = pc.ultima_manutencao;
 
+            // Alertas
             const alertasContainer = document.getElementById('modalAlertasContainer');
             const alertasTexto = document.getElementById('modalAlertasTexto');
             if (pc.alertas && pc.alertas.length > 0) {

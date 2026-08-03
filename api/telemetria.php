@@ -13,14 +13,44 @@ if (!$input) {
     exit;
 }
 
-$hostname     = trim($input['hostname'] ?? '');
-$setorNome    = trim($input['setor_nome'] ?? '');
-$cpuModelo    = trim($input['cpu_modelo'] ?? '');
-$gpuModelo    = trim($input['gpu_modelo'] ?? '');
-$ramTotalMb   = (int)($input['ram_total_mb'] ?? 0);
-$ramLivreMb   = (int)($input['ram_livre_mb'] ?? 0);
-$discoLivreGb = (int)($input['disco_livre_gb'] ?? 0);
-$alertas      = json_encode($input['alertas'] ?? []);
+// -------------------------------------------------------------------------
+// RECEBIMENTO E SANITIZAÇÃO DOS DADOS DO PAYLOAD
+// -------------------------------------------------------------------------
+$hostname       = trim($input['hostname'] ?? '');
+$setorNome      = trim($input['setor_nome'] ?? '');
+$ipLocal        = trim($input['ip_local'] ?? '');
+$macAddress     = trim($input['mac_address'] ?? '');
+$osNome         = trim($input['os_nome'] ?? '');
+
+// Dados da CPU
+$cpuModelo      = trim($input['cpu_modelo'] ?? '');
+$cpuCores       = (int)($input['cpu_cores'] ?? 0);
+$cpuThreads     = (int)($input['cpu_threads'] ?? 0);
+$cpuClockMhz    = (int)($input['cpu_clock_mhz'] ?? 0);
+$cpuSocket      = trim($input['cpu_socket'] ?? '');
+
+// Dados da Placa-Mãe
+$moboFabricante = trim($input['mobo_fabricante'] ?? '');
+$moboModelo     = trim($input['mobo_modelo'] ?? '');
+$biosVersao     = trim($input['bios_versao'] ?? '');
+
+// Dados da GPU
+$gpuModelo      = trim($input['gpu_modelo'] ?? '');
+$gpuVramMb      = (int)($input['gpu_vram_mb'] ?? 0);
+
+// Dados da Memória RAM
+$ramTotalMb     = (int)($input['ram_total_mb'] ?? 0);
+$ramLivreMb     = (int)($input['ram_livre_mb'] ?? 0);
+$ramTipo        = trim($input['ram_tipo'] ?? '');
+$ramClockMhz    = (int)($input['ram_clock_mhz'] ?? 0);
+$ramPentes      = (int)($input['ram_pentes'] ?? 0);
+
+// Dados do Disco
+$discoTotalGb   = (int)($input['disco_total_gb'] ?? 0);
+$discoLivreGb   = (int)($input['disco_livre_gb'] ?? 0);
+
+// Alertas de Telemetria
+$alertas        = json_encode($input['alertas'] ?? []);
 
 if (empty($hostname)) {
     http_response_code(422);
@@ -31,14 +61,13 @@ if (empty($hostname)) {
 try {
     $pdo->beginTransaction();
 
-    // 1. Tenta vincular ou cadastrar o Setor digitado na tabela secretarias_setores de forma segura
+    // 1. Tenta vincular ou cadastrar o Setor digitado na tabela secretarias_setores
     $setorId = null;
     if (!empty($setorNome)) {
         $stmtSetor = $pdo->prepare("SELECT id FROM secretarias_setores WHERE LOWER(nome) = LOWER(:nome) LIMIT 1");
         $stmtSetor->execute([':nome' => $setorNome]);
         $setorId = $stmtSetor->fetchColumn();
 
-        // Se o setor não existir, tenta criar de forma resiliente
         if (!$setorId) {
             try {
                 $sigla = strtoupper(substr($setorNome, 0, 5));
@@ -46,58 +75,88 @@ try {
                 $stmtInsSetor->execute([':nome' => $setorNome, ':sigla' => $sigla]);
                 $setorId = $pdo->lastInsertId();
             } catch (\Throwable $e) {
-                // Caso a tabela secretarias_setores exija outros campos obrigatorios, prossegue sem travar
                 $setorId = null;
             }
         }
     }
 
-    // 2. Insere ou Atualiza o Dispositivo
-    $sqlDispositivo = "INSERT INTO dispositivos 
-                        (hostname, setor_id, setor_nome, cpu_modelo, gpu_modelo, ram_total_mb, primeiro_acesso, ultimo_acesso) 
-                       VALUES 
-                        (:hostname, :setor_id, :setor_nome, :cpu_modelo, :gpu_modelo, :ram_total_mb, NOW(), NOW())
-                       ON DUPLICATE KEY UPDATE 
-                        hostname = :hostname_update,
-                        setor_id = COALESCE(:setor_id_update, setor_id),
-                        setor_nome = :setor_nome_update,
-                        cpu_modelo = :cpu_modelo_update,
-                        gpu_modelo = :gpu_modelo_update,
-                        ram_total_mb = :ram_total_mb_update,
-                        ultimo_acesso = NOW()";
+    // 2. Insere ou Atualiza o Dispositivo com os novos dados estilo CPU-Z
+    $sqlDispositivo = "INSERT INTO dispositivos (
+            hostname, setor_id, setor_nome, ip_local, mac_address, os_nome,
+            cpu_modelo, cpu_cores, cpu_threads, cpu_clock_mhz, cpu_socket,
+            mobo_fabricante, mobo_modelo, bios_versao,
+            gpu_modelo, gpu_vram_mb,
+            ram_total_mb, ram_tipo, ram_clock_mhz, ram_pentes,
+            disco_total_gb, primeiro_acesso, ultimo_acesso
+        ) VALUES (
+            :hostname, :setor_id, :setor_nome, :ip_local, :mac_address, :os_nome,
+            :cpu_modelo, :cpu_cores, :cpu_threads, :cpu_clock_mhz, :cpu_socket,
+            :mobo_fabricante, :mobo_modelo, :bios_versao,
+            :gpu_modelo, :gpu_vram_mb,
+            :ram_total_mb, :ram_tipo, :ram_clock_mhz, :ram_pentes,
+            :disco_total_gb, NOW(), NOW()
+        )
+        ON DUPLICATE KEY UPDATE 
+            hostname        = VALUES(hostname),
+            setor_id        = COALESCE(VALUES(setor_id), setor_id),
+            setor_nome      = VALUES(setor_nome),
+            ip_local        = VALUES(ip_local),
+            mac_address     = VALUES(mac_address),
+            os_nome         = VALUES(os_nome),
+            cpu_modelo      = VALUES(cpu_modelo),
+            cpu_cores       = VALUES(cpu_cores),
+            cpu_threads     = VALUES(cpu_threads),
+            cpu_clock_mhz   = VALUES(cpu_clock_mhz),
+            cpu_socket      = VALUES(cpu_socket),
+            mobo_fabricante = VALUES(mobo_fabricante),
+            mobo_modelo     = VALUES(mobo_modelo),
+            bios_versao     = VALUES(bios_versao),
+            gpu_modelo      = VALUES(gpu_modelo),
+            gpu_vram_mb     = VALUES(gpu_vram_mb),
+            ram_total_mb    = VALUES(ram_total_mb),
+            ram_tipo        = VALUES(ram_tipo),
+            ram_clock_mhz   = VALUES(ram_clock_mhz),
+            ram_pentes      = VALUES(ram_pentes),
+            disco_total_gb  = VALUES(disco_total_gb),
+            ultimo_acesso   = NOW()";
 
     $stmt = $pdo->prepare($sqlDispositivo);
-    
-    // Values
-    $stmt->bindValue(':hostname', $hostname);
-    $stmt->bindValue(':setor_id', $setorId, $setorId ? PDO::PARAM_INT : PDO::PARAM_NULL);
-    $stmt->bindValue(':setor_nome', $setorNome);
-    $stmt->bindValue(':cpu_modelo', $cpuModelo);
-    $stmt->bindValue(':gpu_modelo', $gpuModelo);
-    $stmt->bindValue(':ram_total_mb', $ramTotalMb);
 
-    // Updates
-    $stmt->bindValue(':hostname_update', $hostname);
-    $stmt->bindValue(':setor_id_update', $setorId, $setorId ? PDO::PARAM_INT : PDO::PARAM_NULL);
-    $stmt->bindValue(':setor_nome_update', $setorNome);
-    $stmt->bindValue(':cpu_modelo_update', $cpuModelo);
-    $stmt->bindValue(':gpu_modelo_update', $gpuModelo);
-    $stmt->bindValue(':ram_total_mb_update', $ramTotalMb);
+    $stmt->execute([
+        ':hostname'        => $hostname,
+        ':setor_id'        => $setorId ?: null,
+        ':setor_nome'      => $setorNome,
+        ':ip_local'        => $ipLocal,
+        ':mac_address'     => $macAddress,
+        ':os_nome'         => $osNome,
+        ':cpu_modelo'      => $cpuModelo,
+        ':cpu_cores'       => $cpuCores,
+        ':cpu_threads'     => $cpuThreads,
+        ':cpu_clock_mhz'   => $cpuClockMhz,
+        ':cpu_socket'      => $cpuSocket,
+        ':mobo_fabricante' => $moboFabricante,
+        ':mobo_modelo'     => $moboModelo,
+        ':bios_versao'     => $biosVersao,
+        ':gpu_modelo'      => $gpuModelo,
+        ':gpu_vram_mb'     => $gpuVramMb,
+        ':ram_total_mb'    => $ramTotalMb,
+        ':ram_tipo'        => $ramTipo,
+        ':ram_clock_mhz'   => $ramClockMhz,
+        ':ram_pentes'      => $ramPentes,
+        ':disco_total_gb'  => $discoTotalGb
+    ]);
 
-    $stmt->execute();
-
-    // 3. Pega o ID do dispositivo para a telemetria
+    // 3. Obtém o ID do dispositivo para o vínculo da telemetria
     $stmtId = $pdo->prepare("SELECT id FROM dispositivos WHERE hostname = :hostname LIMIT 1");
     $stmtId->execute([':hostname' => $hostname]);
     $dispositivoId = $stmtId->fetchColumn();
 
-    // 4. Grava/Atualiza a Telemetria (Apenas 1 registro por dispositivo)
+    // 4. Registra/Atualiza os dados de Telemetria Dinâmica
     $stmtCheck = $pdo->prepare("SELECT id FROM dispositivos_telemetria WHERE dispositivo_id = :dispositivo_id LIMIT 1");
     $stmtCheck->execute([':dispositivo_id' => $dispositivoId]);
     $existeTelemetria = $stmtCheck->fetchColumn();
 
     if ($existeTelemetria) {
-        // Se já existe, apenas ATUALIZA os dados mais recentes
         $stmtTel = $pdo->prepare("UPDATE dispositivos_telemetria SET 
                                     ram_livre_mb = :ram_livre_mb, 
                                     disco_livre_gb = :disco_livre_gb, 
@@ -105,7 +164,6 @@ try {
                                     criado_em = NOW() 
                                   WHERE dispositivo_id = :dispositivo_id");
     } else {
-        // Se é a primeira vez, CRIA o registro inicial
         $stmtTel = $pdo->prepare("INSERT INTO dispositivos_telemetria 
                                     (dispositivo_id, ram_livre_mb, disco_livre_gb, alertas, criado_em) 
                                   VALUES 
@@ -121,7 +179,7 @@ try {
 
     $pdo->commit();
     http_response_code(200);
-    echo json_encode(['status' => 'success', 'mensagem' => 'Dados atualizados com sucesso.']);
+    echo json_encode(['status' => 'success', 'mensagem' => 'Dados de telemetria completos atualizados com sucesso.']);
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) {
