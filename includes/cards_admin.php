@@ -62,8 +62,8 @@
         <div class="card shadow-sm border-danger">
             <div class="card-body">
                 <h5 class="card-title">Verinha</h5>
-                <p class="card-text">Moniore computadores com o Page</p>
-             <a href="/helpdesk_prefeitura/admin/dispositivos.php" class="btn btn-danger btn-sm">Entrar no Pagé</a>
+                <p class="card-text">Moniore computadores com a verinha</p>
+             <a href="/helpdesk_prefeitura/admin/dispositivos.php" class="btn btn-danger btn-sm">Acesse a verinha</a>
             </div>
         </div>
     </div>
