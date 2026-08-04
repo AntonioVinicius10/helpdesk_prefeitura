@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 30-Jul-2026 às 17:09
+-- Tempo de geração: 04-Ago-2026 às 02:52
 -- Versão do servidor: 10.4.11-MariaDB
 -- versão do PHP: 7.4.1
 
@@ -67,8 +67,19 @@ CREATE TABLE `chamados` (
   `categoria_id` int(11) NOT NULL,
   `criado_em` timestamp NOT NULL DEFAULT current_timestamp(),
   `atualizado_em` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `fechado_em` datetime DEFAULT NULL
+  `fechado_em` datetime DEFAULT NULL,
+  `tempo_atendimento` int(11) DEFAULT NULL COMMENT 'Tempo em segundos'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Extraindo dados da tabela `chamados`
+--
+
+INSERT INTO `chamados` (`id`, `protocolo`, `titulo`, `descricao`, `status`, `prioridade`, `usuario_id`, `tecnico_id`, `categoria_id`, `criado_em`, `atualizado_em`, `fechado_em`, `tempo_atendimento`) VALUES
+(15, '20260804-9182', 'Problema de impressora', 'Bom dia.', 'resolvido', 'media', 13, NULL, 1, '2026-08-03 23:11:14', '2026-08-04 00:03:15', '2026-08-03 21:03:15', 3121),
+(16, '20260804-3045', 'Problema de impressora', 'boa tarde.', 'resolvido', 'baixa', 13, NULL, 8, '2026-08-03 23:17:42', '2026-08-03 23:18:48', '2026-08-03 20:18:48', 301),
+(17, '20260804-3042', 'Problema de impressora', 'boa noite. arrume', 'resolvido', 'media', 13, NULL, 5, '2026-08-03 23:33:24', '2026-08-04 00:02:20', '2026-08-03 21:02:20', 1736),
+(18, '20260804-4038', 'sem internet', 'Boa noite', 'resolvido', 'media', 13, NULL, 5, '2026-08-04 00:09:02', '2026-08-04 00:13:58', '2026-08-03 21:13:58', 296);
 
 -- --------------------------------------------------------
 
@@ -84,6 +95,13 @@ CREATE TABLE `chamados_respostas` (
   `criado_em` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+--
+-- Extraindo dados da tabela `chamados_respostas`
+--
+
+INSERT INTO `chamados_respostas` (`id`, `chamado_id`, `usuario_id`, `mensagem`, `criado_em`) VALUES
+(35, 18, 1, 'ok vamos resolver', '2026-08-03 21:13:32');
+
 -- --------------------------------------------------------
 
 --
@@ -94,14 +112,36 @@ CREATE TABLE `dispositivos` (
   `id` int(11) NOT NULL,
   `hostname` varchar(100) NOT NULL,
   `cpu_modelo` varchar(150) DEFAULT NULL,
+  `cpu_cores` int(11) DEFAULT NULL,
+  `cpu_threads` int(11) DEFAULT NULL,
+  `cpu_clock_mhz` int(11) DEFAULT NULL,
+  `cpu_socket` varchar(50) DEFAULT NULL,
+  `mobo_fabricante` varchar(100) DEFAULT NULL,
+  `mobo_modelo` varchar(100) DEFAULT NULL,
+  `bios_versao` varchar(100) DEFAULT NULL,
   `gpu_modelo` varchar(150) DEFAULT NULL,
+  `gpu_vram_mb` int(11) DEFAULT NULL,
   `ram_total_mb` int(11) NOT NULL,
+  `ram_tipo` varchar(20) DEFAULT NULL,
+  `ram_clock_mhz` int(11) DEFAULT NULL,
+  `ram_pentes` int(11) DEFAULT NULL,
+  `disco_total_gb` int(11) DEFAULT NULL,
   `usuario_id` int(11) DEFAULT NULL COMMENT 'Usuário principal ou dono do dispositivo',
   `setor_id` int(11) DEFAULT NULL COMMENT 'Setor onde o PC está alocado',
   `setor_nome` varchar(100) DEFAULT NULL,
+  `ip_local` varchar(45) DEFAULT NULL,
+  `mac_address` varchar(17) DEFAULT NULL,
+  `os_nome` varchar(100) DEFAULT NULL,
   `primeiro_acesso` timestamp NOT NULL DEFAULT current_timestamp(),
   `ultimo_acesso` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Extraindo dados da tabela `dispositivos`
+--
+
+INSERT INTO `dispositivos` (`id`, `hostname`, `cpu_modelo`, `cpu_cores`, `cpu_threads`, `cpu_clock_mhz`, `cpu_socket`, `mobo_fabricante`, `mobo_modelo`, `bios_versao`, `gpu_modelo`, `gpu_vram_mb`, `ram_total_mb`, `ram_tipo`, `ram_clock_mhz`, `ram_pentes`, `disco_total_gb`, `usuario_id`, `setor_id`, `setor_nome`, `ip_local`, `mac_address`, `os_nome`, `primeiro_acesso`, `ultimo_acesso`) VALUES
+(212, 'Antonio', 'Intel(R) Celeron(R) CPU 5205U @ 1.90GHz', 0, 0, 0, '', '', '', '', 'Intel(R) UHD Graphics', 0, 3911, '', 0, 0, 0, NULL, 23, 'almoxerifado', '', '', '', '2026-08-03 20:32:23', '2026-08-03 20:49:30');
 
 -- --------------------------------------------------------
 
@@ -117,6 +157,13 @@ CREATE TABLE `dispositivos_telemetria` (
   `alertas` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Ex: ["CRITICAL_LOW_RAM", "CRITICAL_LOW_DISK"]' CHECK (json_valid(`alertas`)),
   `criado_em` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Extraindo dados da tabela `dispositivos_telemetria`
+--
+
+INSERT INTO `dispositivos_telemetria` (`id`, `dispositivo_id`, `ram_livre_mb`, `disco_livre_gb`, `alertas`, `criado_em`) VALUES
+(67, 212, 919, 0, '[\"O disco esta Quase cheio\"]', '2026-08-03 20:49:30');
 
 -- --------------------------------------------------------
 
@@ -155,7 +202,10 @@ INSERT INTO `secretarias_setores` (`id`, `nome`, `sigla`, `ativo`, `criado_em`) 
 (2, 'Secretaria de Educação', 'SEDUC', 1, '2026-07-23 02:36:02'),
 (5, 'TI prefeitura de Borborema', 'TEC TI', 1, '2026-07-24 23:08:40'),
 (6, 'Almoxarifado borbo', 'AM', 1, '2026-07-27 16:30:20'),
-(7, 'obras e postura', 'OP', 1, '2026-07-27 17:42:54');
+(7, 'obras e postura', 'OP', 1, '2026-07-27 17:42:54'),
+(21, 'test11', 'TEST1', 1, '2026-08-03 19:16:05'),
+(22, 'Geral', 'GERAL', 1, '2026-08-03 19:16:09'),
+(23, 'almoxerifado', 'ALMOX', 1, '2026-08-03 19:57:58');
 
 -- --------------------------------------------------------
 
@@ -182,7 +232,8 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id`, `nome`, `email`, `senha`, `cpf`, `telefone`, `perfil`, `setor_id`, `ativo`, `criado_em`, `atualizado_em`) VALUES
-(1, 'testadmin', 'testadmin@borborema.sp.gov.br', '$2y$10$FFnSpFO6YqO6RSNFFeQzmOoXRq.FV6qvAOy1coGhYhkF1NgJfgXPS', NULL, '(31) 99999-9999', 'admin', 1, 1, '2026-07-23 02:36:02', '2026-07-25 01:05:19');
+(1, 'testadmin', 'testadmin@borborema.sp.gov.br', '$2y$10$FFnSpFO6YqO6RSNFFeQzmOoXRq.FV6qvAOy1coGhYhkF1NgJfgXPS', NULL, '(31) 99999-9999', 'admin', 1, 1, '2026-07-23 02:36:02', '2026-07-25 01:05:19'),
+(13, 'maria silva', 'maria@gmail.com', '$2y$10$3HilKiAaUbRPk0HlUnxN/eAmEoBePC86bspDKZQG5QcItXKZxM9U6', NULL, '(16) 99723-8521', 'usuario', 6, 1, '2026-08-03 22:44:46', '2026-08-03 22:44:46');
 
 --
 -- Índices para tabelas despejadas
@@ -267,25 +318,25 @@ ALTER TABLE `categorias`
 -- AUTO_INCREMENT de tabela `chamados`
 --
 ALTER TABLE `chamados`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT de tabela `chamados_respostas`
 --
 ALTER TABLE `chamados_respostas`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
 -- AUTO_INCREMENT de tabela `dispositivos`
 --
 ALTER TABLE `dispositivos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=101;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=228;
 
 --
 -- AUTO_INCREMENT de tabela `dispositivos_telemetria`
 --
 ALTER TABLE `dispositivos_telemetria`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=62;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=68;
 
 --
 -- AUTO_INCREMENT de tabela `interacoes_chamado`
@@ -297,13 +348,13 @@ ALTER TABLE `interacoes_chamado`
 -- AUTO_INCREMENT de tabela `secretarias_setores`
 --
 ALTER TABLE `secretarias_setores`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT de tabela `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- Restrições para despejos de tabelas
