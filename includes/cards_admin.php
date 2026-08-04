@@ -27,7 +27,7 @@
             <div class="card-body">
                 <h5 class="card-title">Relatórios</h5>
                 <p class="card-text">Visualizar métricas e total de chamados.</p>
-                <a href="#" class="btn btn-danger btn-sm">Ver Relatórios</a>
+                <a href="/helpdesk_prefeitura/includes/relatorios.php" class="btn btn-danger btn-sm">Ver Relatórios</a>
             </div>
         </div>
     </div>
@@ -61,7 +61,7 @@
     <div class="col-md-4">
         <div class="card shadow-sm border-danger">
             <div class="card-body">
-                <h5 class="card-title">Pagé</h5>
+                <h5 class="card-title">Verinha</h5>
                 <p class="card-text">Moniore computadores com o Page</p>
              <a href="/helpdesk_prefeitura/admin/dispositivos.php" class="btn btn-danger btn-sm">Entrar no Pagé</a>
             </div>

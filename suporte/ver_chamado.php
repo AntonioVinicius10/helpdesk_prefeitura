@@ -1,5 +1,6 @@
 <?php
 session_start();
+date_default_timezone_set('America/Sao_Paulo'); // <-- FUSO CORRETO
 require_once __DIR__ . '/../config/conexao.php';
 
 // 1. SEGURANÇA: Apenas admin e tecnico
@@ -24,8 +25,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     $novo_status = $_POST['status'] ?? '';
     if (in_array($novo_status, ['aberto', 'em_andamento', 'resolvido'])) {
         try {
-            $stmtUpdate = $pdo->prepare("UPDATE chamados SET status = :status WHERE id = :id");
-            $stmtUpdate->execute(['status' => $novo_status, 'id' => $chamado_id]);
+            // Se for fechado, calcula o tempo em segundos via SQL
+            if ($novo_status === 'resolvido') {
+                $sqlUpdate = "UPDATE chamados 
+                              SET status = :status, 
+                                  fechado_em = NOW(), 
+                                  tempo_atendimento = TIMESTAMPDIFF(SECOND, criado_em, NOW()) 
+                              WHERE id = :id";
+                $stmtUpdate = $pdo->prepare($sqlUpdate);
+                $stmtUpdate->execute(['status' => $novo_status, 'id' => $chamado_id]);
+            } else {
+                $stmtUpdate = $pdo->prepare("UPDATE chamados SET status = :status WHERE id = :id");
+                $stmtUpdate->execute(['status' => $novo_status, 'id' => $chamado_id]);
+            }
             $_SESSION['flash_sucesso'] = "Status do chamado atualizado com sucesso!";
         } catch (PDOException $e) {
             $_SESSION['flash_erro'] = "Erro ao atualizar status: " . $e->getMessage();
@@ -104,7 +116,36 @@ try {
     $stmtR->execute(['chamado_id' => $chamado_id]);
     $respostas = $stmtR->fetchAll();
 } catch (PDOException $e) {
-    // Tabela pode não existir, ignoramos silenciosamente
+    // Tabela pode não existir, ignoramos
+}
+
+// ===== FUNÇÃO PARA FORMATAR TEMPO (segundos -> H:i:s) =====
+function formatarTempo($segundos) {
+    if (is_null($segundos) || $segundos <= 0) {
+        return '--';
+    }
+    $horas = floor($segundos / 3600);
+    $minutos = floor(($segundos % 3600) / 60);
+    $seg = $segundos % 60;
+    return sprintf("%02d:%02d:%02d", $horas, $minutos, $seg);
+}
+
+// ===== CALCULAR TEMPO DECORRIDO OU TOTAL =====
+$tempoExibicao = '';
+if ($chamado['status'] === 'resolvido') {
+    // Se já fechado, usa o tempo armazenado (em segundos)
+    if (!empty($chamado['tempo_atendimento'])) {
+        $tempoExibicao = "Tempo total: " . formatarTempo($chamado['tempo_atendimento']);
+    } else {
+        $tempoExibicao = "Tempo não registrado";
+    }
+} else {
+    // Em andamento: calcular diferença em segundos usando DateTime com fuso
+    $criado = new DateTime($chamado['criado_em']);
+    $agora = new DateTime('now');
+    $intervalo = $criado->diff($agora);
+    $diff = $intervalo->days * 86400 + $intervalo->h * 3600 + $intervalo->i * 60 + $intervalo->s;
+    $tempoExibicao = "Em andamento: " . formatarTempo($diff);
 }
 ?>
 <!DOCTYPE html>
@@ -153,6 +194,11 @@ try {
                     <h6><strong>Descrição do Problema:</strong></h6>
                     <div class="bg-light p-3 rounded border mb-3">
                         <?= nl2br(htmlspecialchars($chamado['descricao'])) ?>
+                    </div>
+                    
+                    <!-- Exibição do tempo corrigida -->
+                    <div class="mt-3 p-2 bg-info bg-opacity-10 rounded border border-info">
+                        <i class="bi bi-clock"></i> <strong><?= $tempoExibicao ?></strong>
                     </div>
                 </div>
             </div>
@@ -236,5 +282,7 @@ try {
     </div>
 
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

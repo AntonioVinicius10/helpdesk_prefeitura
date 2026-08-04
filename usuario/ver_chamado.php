@@ -21,7 +21,7 @@ if ($chamado_id <= 0) {
     exit;
 }
 
-// 2. PROCESSAR NOVA MENSAGEM DO USUÁRIO (RÉPLICA)
+// ===== PROCESSAR NOVA MENSAGEM DO USUÁRIO (RÉPLICA) =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'enviar_resposta') {
     $resposta = trim($_POST['resposta'] ?? '');
 
@@ -42,12 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
             $_SESSION['flash_erro'] = "Erro ao enviar resposta: " . $e->getMessage();
         }
     }
-    // Redireciona para evitar reenvio ao recarregar
     header("Location: ver_chamado.php?id=" . $chamado_id);
     exit;
 }
 
-// 3. BUSCAR O CHAMADO (GARANTINDO QUE É DO PRÓPRIO USUÁRIO)
+// ===== BUSCAR O CHAMADO (GARANTINDO QUE É DO PRÓPRIO USUÁRIO) =====
 try {
     $sql = "SELECT 
                 c.*, 
@@ -70,7 +69,7 @@ try {
     exit;
 }
 
-// 4. BUSCAR RESPOSTAS DO SUPORTE / USUÁRIO
+// ===== BUSCAR RESPOSTAS =====
 $respostas = [];
 try {
     $sqlRespostas = "SELECT r.*, u.nome AS autor_nome, u.perfil AS autor_perfil 
@@ -83,6 +82,25 @@ try {
     $respostas = $stmtR->fetchAll();
 } catch (PDOException $e) {
     // Tabela pode ainda estar sem registros
+}
+
+// ===== FUNÇÃO PARA FORMATAR TEMPO (segundos -> H:i:s) =====
+function formatarTempo($segundos) {
+    if (is_null($segundos) || $segundos <= 0) {
+        return '--';
+    }
+    $horas = floor($segundos / 3600);
+    $minutos = floor(($segundos % 3600) / 60);
+    $seg = $segundos % 60;
+    return sprintf("%02d:%02d:%02d", $horas, $minutos, $seg);
+}
+
+// ===== EXIBIÇÃO DO TEMPO (APENAS SE FECHADO) =====
+$tempoExibicao = '';
+if ($chamado['status'] === 'resolvido' && !empty($chamado['tempo_atendimento'])) {
+    $tempoExibicao = "Tempo total de atendimento: " . formatarTempo($chamado['tempo_atendimento']);
+} elseif ($chamado['status'] === 'resolvido' && empty($chamado['tempo_atendimento'])) {
+    $tempoExibicao = "Chamado resolvido, mas tempo não registrado.";
 }
 ?>
 <!DOCTYPE html>
@@ -123,7 +141,7 @@ try {
                         <span class="badge bg-primary fs-6">Aberto</span>
                     <?php elseif ($chamado['status'] === 'em_andamento'): ?>
                         <span class="badge bg-warning text-dark fs-6">Em Andamento</span>
-                    <?php elseif ($chamado['status'] === 'fechado'): ?>
+                    <?php elseif ($chamado['status'] === 'resolvido'): ?>
                         <span class="badge bg-success fs-6">Fechado</span>
                     <?php endif; ?>
                 </div>
@@ -139,6 +157,13 @@ try {
                 <div class="bg-light p-3 rounded border mb-3">
                     <?= nl2br(htmlspecialchars($chamado['descricao'])) ?>
                 </div>
+                
+                <!-- Exibição do tempo (apenas se fechado) -->
+                <?php if (!empty($tempoExibicao)): ?>
+                    <div class="mt-3 p-2 bg-info bg-opacity-10 rounded border border-info">
+                        <i class="bi bi-clock"></i> <strong><?= $tempoExibicao ?></strong>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -169,7 +194,7 @@ try {
             </div>
         </div>
 
-        <?php if ($chamado['status'] !== 'fechado'): ?>
+        <?php if ($chamado['status'] !== 'resolvido'): ?>
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
                     <h6 class="mb-0">Enviar Mensagem Adicional / Réplica</h6>
