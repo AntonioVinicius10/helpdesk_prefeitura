@@ -1,4 +1,14 @@
 <?php
+session_start();
+
+if (!isset($_SESSION['usuario_id'])) {
+    header('Location: /helpdesk_prefeitura/account/login.php');
+    exit;
+}
+
+$usuarioNome = $_SESSION['usuario_nome'] ?? 'Usuário não identificado';
+$usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
+
 // 1. Corrige o fuso horário
 date_default_timezone_set('America/Sao_Paulo');
 
@@ -16,30 +26,37 @@ if (isset($_GET['aprovar_hardware'])) {
             $dev = $stmtDev->fetch(PDO::FETCH_ASSOC);
 
             if ($dev) {
+                $colunaExiste = $pdo->query("SHOW COLUMNS FROM dispositivos_hardware_original LIKE 'alterado_por'")->fetch();
+                if (!$colunaExiste) {
+                    $pdo->exec("ALTER TABLE dispositivos_hardware_original ADD COLUMN alterado_por VARCHAR(255) NULL DEFAULT NULL AFTER dispositivo_id");
+                }
+
                 // Atualiza a baseline com a configuração atual
                 $stmtUpdateOrig = $pdo->prepare("
                     INSERT INTO dispositivos_hardware_original 
-                        (dispositivo_id, cpu_modelo, ram_total_mb, ram_pentes, gpu_modelo, disco_total_gb, discos, criado_em)
+                        (dispositivo_id, alterado_por, cpu_modelo, ram_total_mb, ram_pentes, gpu_modelo, disco_total_gb, discos, criado_em)
                     VALUES 
-                        (:dispositivo_id, :cpu_modelo, :ram_total_mb, :ram_pentes, :gpu_modelo, :disco_total_gb, :discos, NOW())
+                        (:dispositivo_id, :alterado_por, :cpu_modelo, :ram_total_mb, :ram_pentes, :gpu_modelo, :disco_total_gb, :discos, NOW())
                     ON DUPLICATE KEY UPDATE 
-                        cpu_modelo     = VALUES(cpu_modelo),
-                        ram_total_mb   = VALUES(ram_total_mb),
-                        ram_pentes     = VALUES(ram_pentes),
-                        gpu_modelo     = VALUES(gpu_modelo),
-                        disco_total_gb = VALUES(disco_total_gb),
-                        discos         = VALUES(discos),
-                        criado_em      = NOW()
+                        alterado_por    = VALUES(alterado_por),
+                        cpu_modelo      = VALUES(cpu_modelo),
+                        ram_total_mb    = VALUES(ram_total_mb),
+                        ram_pentes      = VALUES(ram_pentes),
+                        gpu_modelo      = VALUES(gpu_modelo),
+                        disco_total_gb  = VALUES(disco_total_gb),
+                        discos          = VALUES(discos),
+                        criado_em       = NOW()
                 ");
 
                 $stmtUpdateOrig->execute([
                     ':dispositivo_id' => $dev['id'],
-                    ':cpu_modelo'      => $dev['cpu_modelo'],
-                    ':ram_total_mb'    => $dev['ram_total_mb'],
-                    ':ram_pentes'      => $dev['ram_pentes'],
-                    ':gpu_modelo'      => $dev['gpu_modelo'],
-                    ':disco_total_gb'  => $dev['disco_total_gb'],
-                    ':discos'          => $dev['discos']
+                    ':alterado_por'   => $usuarioNome,
+                    ':cpu_modelo'     => $dev['cpu_modelo'],
+                    ':ram_total_mb'   => $dev['ram_total_mb'],
+                    ':ram_pentes'     => $dev['ram_pentes'],
+                    ':gpu_modelo'     => $dev['gpu_modelo'],
+                    ':disco_total_gb' => $dev['disco_total_gb'],
+                    ':discos'         => $dev['discos']
                 ]);
 
                 // Limpa os alertas antigos de fraude da telemetria
@@ -252,6 +269,7 @@ $alerta_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'ale
     <?php include __DIR__ . '/../includes/components/card_dispositivo.php'; ?>
 
     <script>
+        const usuarioNome = <?= json_encode($usuarioNome) ?>;
         let filtroAtual = 'todos';
 
         function abrirModal(pc) {
@@ -317,7 +335,17 @@ $alerta_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'ale
         container.innerHTML = '<p class="text-xs text-slate-500 italic">Nenhum disco detectado.</p>';
     }
 
-    // Exibe o modal
+const linkAprovar = document.getElementById('linkAprovarHardware');
+            if (linkAprovar) {
+                linkAprovar.href = '/helpdesk_prefeitura/admin/dispositivos.php?aprovar_hardware=' + pc.id;
+                linkAprovar.onclick = function () {
+                    const hostname = pc.hostname || 'este dispositivo';
+                    const mensagem = 'Deseja salvar a configuração atual como o novo Hardware Original de ' + hostname + '?\n\nEsta ação será registrada para ' + usuarioNome + '.';
+                    return confirm(mensagem);
+                };
+            }
+
+            // Exibe o modal
     document.getElementById('modalDetalhes').classList.remove('hidden');
            
               // fim codigo armazenamento

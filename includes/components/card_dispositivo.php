@@ -155,9 +155,8 @@
 
         <div class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
             
-            <a href="dispositivos.php?aprovar_hardware=<?php echo $d['id']; ?>" 
-                onclick="return confirm('Deseja salvar a configuração atual como o novo Hardware Original do dispositivo?')"
-                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition">
+            <a href="#" id="linkAprovarHardware"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition inline-flex items-center">
                 <i class="fa-solid fa-shield-check mr-1"></i> Aprovar / Recalibrar Hardware
             </a>
 

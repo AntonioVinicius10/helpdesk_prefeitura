@@ -67,4 +67,13 @@
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger">
+            <div class="card-body">
+                <h5 class="card-title">historico de Pcs</h5>
+                <p class="card-text">Veja os historicos e o que foi apagado e alterado</p>
+             <a href="/helpdesk_prefeitura/suporte/historicos_pcs.php" class="btn btn-danger btn-sm">Acesse o Historico</a>
+            </div>
+        </div>
+    </div>
 </div>
