@@ -4,8 +4,85 @@ date_default_timezone_set('America/Sao_Paulo');
 
 require_once __DIR__ . '/../config/conexao.php';
 
+
+// Ação para recadastrar o hardware atual como o novo padrão/original
+if (isset($_GET['aprovar_hardware'])) {
+    $idAprovar = (int)$_GET['aprovar_hardware'];
+    if ($idAprovar > 0) {
+        try {
+            // Busca os dados atuais da máquina
+            $stmtDev = $pdo->prepare("SELECT * FROM dispositivos WHERE id = :id LIMIT 1");
+            $stmtDev->execute(['id' => $idAprovar]);
+            $dev = $stmtDev->fetch(PDO::FETCH_ASSOC);
+
+            if ($dev) {
+                // Atualiza a baseline com a configuração atual
+                $stmtUpdateOrig = $pdo->prepare("
+                    INSERT INTO dispositivos_hardware_original 
+                        (dispositivo_id, cpu_modelo, ram_total_mb, ram_pentes, gpu_modelo, disco_total_gb, discos, criado_em)
+                    VALUES 
+                        (:dispositivo_id, :cpu_modelo, :ram_total_mb, :ram_pentes, :gpu_modelo, :disco_total_gb, :discos, NOW())
+                    ON DUPLICATE KEY UPDATE 
+                        cpu_modelo     = VALUES(cpu_modelo),
+                        ram_total_mb   = VALUES(ram_total_mb),
+                        ram_pentes     = VALUES(ram_pentes),
+                        gpu_modelo     = VALUES(gpu_modelo),
+                        disco_total_gb = VALUES(disco_total_gb),
+                        discos         = VALUES(discos),
+                        criado_em      = NOW()
+                ");
+
+                $stmtUpdateOrig->execute([
+                    ':dispositivo_id' => $dev['id'],
+                    ':cpu_modelo'      => $dev['cpu_modelo'],
+                    ':ram_total_mb'    => $dev['ram_total_mb'],
+                    ':ram_pentes'      => $dev['ram_pentes'],
+                    ':gpu_modelo'      => $dev['gpu_modelo'],
+                    ':disco_total_gb'  => $dev['disco_total_gb'],
+                    ':discos'          => $dev['discos']
+                ]);
+
+                // Limpa os alertas antigos de fraude da telemetria
+                $stmtClearTel = $pdo->prepare("UPDATE dispositivos_telemetria SET alertas = '[]' WHERE dispositivo_id = :id");
+                $stmtClearTel->execute(['id' => $dev['id']]);
+            }
+
+            header('Location: dispositivos.php');
+            exit;
+        } catch (PDOException $e) {
+            $mensagemErro = 'Erro ao aprovar novo hardware: ' . $e->getMessage();
+        }
+    }
+}
+
+
+
+if (isset($_GET['excluir_dispositivo'])) {
+    $idExcluir = (int)$_GET['excluir_dispositivo'];
+
+    if ($idExcluir > 0) {
+        try {
+            $pdo->beginTransaction();
+            $stmtTelemetria = $pdo->prepare("DELETE FROM dispositivos_telemetria WHERE dispositivo_id = :id");
+            $stmtTelemetria->execute(['id' => $idExcluir]);
+
+            $stmtDispositivo = $pdo->prepare("DELETE FROM dispositivos WHERE id = :id");
+            $stmtDispositivo->execute(['id' => $idExcluir]);
+
+            $pdo->commit();
+            header('Location: dispositivos.php');
+            exit;
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $mensagemErro = 'Erro ao excluir dispositivo: ' . $e->getMessage();
+        }
+    }
+}
+
 try {
-    // 2. Consulta MySQL incluindo os novos campos no estilo CPU-Z
+    // 2. Consulta MySQL incluindo d.discos da tabela dispositivos
     $sql = "
         SELECT 
             d.id,
@@ -28,6 +105,7 @@ try {
             d.ram_clock_mhz,
             d.ram_pentes,
             d.disco_total_gb,
+            d.discos,
             d.ultimo_acesso,
             TIMESTAMPDIFF(SECOND, d.ultimo_acesso, NOW()) AS segundos_desde_ultimo_acesso,
             s.nome AS setor_nome,
@@ -81,6 +159,18 @@ foreach ($dispositivosBanco as $d) {
         $uptimeTexto = $minutosAtras <= 1 ? 'Ativo agora' : "Visto há {$minutosAtras} min";
     }
 
+    // Processamento do Array de Múltiplos Discos (JSON de d.discos)
+    $discosLista = !empty($d['discos']) ? json_decode($d['discos'], true) : [];
+
+    // Fallback: Se não houver array de discos salvo, monta o padrão com o C:
+    if (empty($discosLista) && !empty($d['disco_total_gb'])) {
+        $discosLista[] = [
+            'unidade'  => 'C:',
+            'total_gb' => (float)$d['disco_total_gb'],
+            'livre_gb' => (float)($d['disco_livre_gb'] ?? 0)
+        ];
+    }
+
     $dispositivos[] = [
         'id'                => $d['id'],
         'hostname'          => $d['hostname'],
@@ -113,9 +203,12 @@ foreach ($dispositivosBanco as $d) {
         'ram_clock'         => $d['ram_clock_mhz'] ? $d['ram_clock_mhz'] . ' MHz' : 'N/A',
         'ram_pentes'        => $d['ram_pentes'] ?: 1,
 
-        // Dados de Disco
+        // Dados de Disco Legados
         'disco_total'       => $d['disco_total_gb'] ? $d['disco_total_gb'] . ' GB' : 'N/A',
         'disco_livre'       => ($d['disco_livre_gb'] !== null) ? $d['disco_livre_gb'] . ' GB' : 'N/A',
+        
+        // Novo Array de Múltiplos Discos para passar ao JavaScript/Modal
+        'discos'            => $discosLista,
 
         'uptime'            => $uptimeTexto,
         'ultima_manutencao' => date('d/m/Y H:i', strtotime($d['ultimo_acesso'])),
@@ -182,9 +275,54 @@ $alerta_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'ale
             document.getElementById('modalGpu').innerText = pc.gpu_modelo + (pc.gpu_vram !== 'N/A' ? ' (' + pc.gpu_vram + ' VRAM)' : '');
 
             // Armazenamento
-            document.getElementById('modalDisco').innerText = pc.disco_livre + ' livres de ' + pc.disco_total + ' no C:';
 
-            // Sistema Operacional e Rede
+              // Renderiza a lista de discos dinamicamente
+    const container = document.getElementById('modalDisco');
+    container.innerHTML = ''; // Limpa a lista do modal anterior
+
+    if (pc.discos && pc.discos.length > 0) {
+        pc.discos.forEach(disco => {
+            const total = parseFloat(disco.total_gb) || 1;
+            const livre = parseFloat(disco.livre_gb) || 0;
+            const usado = total - livre;
+            const porcentagemUso = Math.min(100, Math.max(0, Math.round((usado / total) * 100)));
+
+            // Seleciona a cor com base na porcentagem de uso
+            let corBarra = 'bg-blue-500';
+            if (porcentagemUso > 90) {
+                corBarra = 'bg-rose-500';
+            } else if (porcentagemUso > 75) {
+                corBarra = 'bg-amber-500';
+            }
+
+            const cardDiscoHtml = `
+                <div class="bg-slate-800/60 p-3 rounded-lg border border-slate-700/60">
+                    <div class="flex justify-between items-center text-xs mb-1">
+                        <span class="font-bold text-slate-200">
+                            Unidade ${disco.unidade}
+                        </span>
+                        <span class="text-slate-400 font-mono">
+                            ${livre} GB livres de ${total} GB (${porcentagemUso}% usado)
+                        </span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
+                        <div class="h-2 rounded-full ${corBarra} transition-all duration-300" style="width: ${porcentagemUso}%"></div>
+                    </div>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('beforeend', cardDiscoHtml);
+        });
+    } else {
+        container.innerHTML = '<p class="text-xs text-slate-500 italic">Nenhum disco detectado.</p>';
+    }
+
+    // Exibe o modal
+    document.getElementById('modalDetalhes').classList.remove('hidden');
+           
+              // fim codigo armazenamento
+            
+              // Sistema Operacional e Rede
             document.getElementById('modalSetor').innerText = pc.setor;
             document.getElementById('modalOs').innerText = pc.os_nome;
             document.getElementById('modalIp').innerText = pc.ip_local;

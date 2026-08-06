@@ -22,35 +22,38 @@ $ipLocal        = trim($input['ip_local'] ?? '');
 $macAddress     = trim($input['mac_address'] ?? '');
 $osNome         = trim($input['os_nome'] ?? '');
 
-// Dados da CPU
+// CPU
 $cpuModelo      = trim($input['cpu_modelo'] ?? '');
 $cpuCores       = (int)($input['cpu_cores'] ?? 0);
 $cpuThreads     = (int)($input['cpu_threads'] ?? 0);
 $cpuClockMhz    = (int)($input['cpu_clock_mhz'] ?? 0);
 $cpuSocket      = trim($input['cpu_socket'] ?? '');
 
-// Dados da Placa-Mãe
+// Placa-Mãe
 $moboFabricante = trim($input['mobo_fabricante'] ?? '');
 $moboModelo     = trim($input['mobo_modelo'] ?? '');
 $biosVersao     = trim($input['bios_versao'] ?? '');
 
-// Dados da GPU
+// GPU
 $gpuModelo      = trim($input['gpu_modelo'] ?? '');
 $gpuVramMb      = (int)($input['gpu_vram_mb'] ?? 0);
 
-// Dados da Memória RAM
+// RAM
 $ramTotalMb     = (int)($input['ram_total_mb'] ?? 0);
 $ramLivreMb     = (int)($input['ram_livre_mb'] ?? 0);
 $ramTipo        = trim($input['ram_tipo'] ?? '');
 $ramClockMhz    = (int)($input['ram_clock_mhz'] ?? 0);
 $ramPentes      = (int)($input['ram_pentes'] ?? 0);
 
-// Dados do Disco
+// Discos
 $discoTotalGb   = (int)($input['disco_total_gb'] ?? 0);
 $discoLivreGb   = (int)($input['disco_livre_gb'] ?? 0);
 
-// Alertas de Telemetria
-$alertas        = json_encode($input['alertas'] ?? []);
+$discosInput    = isset($input['discos']) && is_array($input['discos']) ? $input['discos'] : [];
+$discosJson     = json_encode($discosInput, JSON_UNESCAPED_UNICODE);
+
+// Alertas coletados pelo agente
+$alertasAgente   = $input['alertas'] ?? [];
 
 if (empty($hostname)) {
     http_response_code(422);
@@ -61,7 +64,7 @@ if (empty($hostname)) {
 try {
     $pdo->beginTransaction();
 
-    // 1. Tenta vincular ou cadastrar o Setor digitado na tabela secretarias_setores
+    // 1. Tenta vincular ou cadastrar o Setor
     $setorId = null;
     if (!empty($setorNome)) {
         $stmtSetor = $pdo->prepare("SELECT id FROM secretarias_setores WHERE LOWER(nome) = LOWER(:nome) LIMIT 1");
@@ -80,21 +83,21 @@ try {
         }
     }
 
-    // 2. Insere ou Atualiza o Dispositivo com os novos dados estilo CPU-Z
+    // 2. Insere ou Atualiza o Dispositivo
     $sqlDispositivo = "INSERT INTO dispositivos (
             hostname, setor_id, setor_nome, ip_local, mac_address, os_nome,
             cpu_modelo, cpu_cores, cpu_threads, cpu_clock_mhz, cpu_socket,
             mobo_fabricante, mobo_modelo, bios_versao,
             gpu_modelo, gpu_vram_mb,
             ram_total_mb, ram_tipo, ram_clock_mhz, ram_pentes,
-            disco_total_gb, primeiro_acesso, ultimo_acesso
+            disco_total_gb, discos, primeiro_acesso, ultimo_acesso
         ) VALUES (
             :hostname, :setor_id, :setor_nome, :ip_local, :mac_address, :os_nome,
             :cpu_modelo, :cpu_cores, :cpu_threads, :cpu_clock_mhz, :cpu_socket,
             :mobo_fabricante, :mobo_modelo, :bios_versao,
             :gpu_modelo, :gpu_vram_mb,
             :ram_total_mb, :ram_tipo, :ram_clock_mhz, :ram_pentes,
-            :disco_total_gb, NOW(), NOW()
+            :disco_total_gb, :discos, NOW(), NOW()
         )
         ON DUPLICATE KEY UPDATE 
             hostname        = VALUES(hostname),
@@ -118,10 +121,10 @@ try {
             ram_clock_mhz   = VALUES(ram_clock_mhz),
             ram_pentes      = VALUES(ram_pentes),
             disco_total_gb  = VALUES(disco_total_gb),
+            discos          = VALUES(discos),
             ultimo_acesso   = NOW()";
 
     $stmt = $pdo->prepare($sqlDispositivo);
-
     $stmt->execute([
         ':hostname'        => $hostname,
         ':setor_id'        => $setorId ?: null,
@@ -143,25 +146,76 @@ try {
         ':ram_tipo'        => $ramTipo,
         ':ram_clock_mhz'   => $ramClockMhz,
         ':ram_pentes'      => $ramPentes,
-        ':disco_total_gb'  => $discoTotalGb
+        ':disco_total_gb'  => $discoTotalGb,
+        ':discos'          => $discosJson
     ]);
 
-    // 3. Obtém o ID do dispositivo para o vínculo da telemetria
+    // 3. Obtém o ID do dispositivo
     $stmtId = $pdo->prepare("SELECT id FROM dispositivos WHERE hostname = :hostname LIMIT 1");
     $stmtId->execute([':hostname' => $hostname]);
     $dispositivoId = $stmtId->fetchColumn();
 
-    // 4. Registra/Atualiza os dados de Telemetria Dinâmica
+    // -------------------------------------------------------------------------
+    // 4. AUDITORIA / COMPARAÇÃO COM HARDWARE ORIGINAL
+    // -------------------------------------------------------------------------
+    $stmtOrig = $pdo->prepare("SELECT * FROM dispositivos_hardware_original WHERE dispositivo_id = :dispositivo_id LIMIT 1");
+    $stmtOrig->execute([':dispositivo_id' => $dispositivoId]);
+    $hardwareOriginal = $stmtOrig->fetch(PDO::FETCH_ASSOC);
+
+    $alertasHardware = [];
+
+    if (!$hardwareOriginal) {
+        // Se ainda não tem registro original, cadastra o atual como padrão
+        $stmtInsOrig = $pdo->prepare("INSERT INTO dispositivos_hardware_original 
+            (dispositivo_id, cpu_modelo, ram_total_mb, ram_pentes, gpu_modelo, disco_total_gb, discos, criado_em)
+            VALUES 
+            (:dispositivo_id, :cpu_modelo, :ram_total_mb, :ram_pentes, :gpu_modelo, :disco_total_gb, :discos, NOW())");
+        
+        $stmtInsOrig->execute([
+            ':dispositivo_id' => $dispositivoId,
+            ':cpu_modelo'      => $cpuModelo,
+            ':ram_total_mb'    => $ramTotalMb,
+            ':ram_pentes'      => $ramPentes,
+            ':gpu_modelo'      => $gpuModelo,
+            ':disco_total_gb'  => $discoTotalGb,
+            ':discos'          => $discosJson
+        ]);
+    } else {
+        // Comparação de segurança
+        if ($ramTotalMb < (int)$hardwareOriginal['ram_total_mb']) {
+            $alertasHardware[] = "🚨 FRAUDE/ALTERAÇÃO: Memória RAM reduzida de {$hardwareOriginal['ram_total_mb']} MB para {$ramTotalMb} MB!";
+        }
+        if ($ramPentes < (int)$hardwareOriginal['ram_pentes']) {
+            $alertasHardware[] = "🚨ALTERAÇÃO: Pente(s) de RAM removido(s)! (De {$hardwareOriginal['ram_pentes']} para {$ramPentes})";
+        }
+        if (!empty($hardwareOriginal['cpu_modelo']) && $cpuModelo !== $hardwareOriginal['cpu_modelo']) {
+            $alertasHardware[] = "🚨ALTERAÇÃO: Processador foi alterado! Original: {$hardwareOriginal['cpu_modelo']}";
+        }
+        if (!empty($hardwareOriginal['gpu_modelo']) && $gpuModelo !== $hardwareOriginal['gpu_modelo']) {
+            $alertasHardware[] = "🚨ALTERAÇÃO: Placa de vídeo foi alterada! Original: {$hardwareOriginal['gpu_modelo']}";
+        }
+
+        $discosOriginais = !empty($hardwareOriginal['discos']) ? json_decode($hardwareOriginal['discos'], true) : [];
+        if (count($discosInput) < count($discosOriginais)) {
+            $alertasHardware[] = "🚨ALTERAÇÃO: Uma unidade de disco foi removida do computador!";
+        }
+    }
+
+    // Consolida alertas normais (espaço em disco, RAM cheia) com alertas graves de segurança
+    $todosAlertas = array_merge($alertasHardware, $alertasAgente);
+    $alertasFinalJson = json_encode($todosAlertas, JSON_UNESCAPED_UNICODE);
+
+    // 5. Atualiza a Telemetria Dinâmica
     $stmtCheck = $pdo->prepare("SELECT id FROM dispositivos_telemetria WHERE dispositivo_id = :dispositivo_id LIMIT 1");
     $stmtCheck->execute([':dispositivo_id' => $dispositivoId]);
     $existeTelemetria = $stmtCheck->fetchColumn();
 
     if ($existeTelemetria) {
         $stmtTel = $pdo->prepare("UPDATE dispositivos_telemetria SET 
-                                    ram_livre_mb = :ram_livre_mb, 
+                                    ram_livre_mb   = :ram_livre_mb, 
                                     disco_livre_gb = :disco_livre_gb, 
-                                    alertas = :alertas, 
-                                    criado_em = NOW() 
+                                    alertas        = :alertas, 
+                                    criado_em      = NOW() 
                                   WHERE dispositivo_id = :dispositivo_id");
     } else {
         $stmtTel = $pdo->prepare("INSERT INTO dispositivos_telemetria 
@@ -174,12 +228,12 @@ try {
         ':dispositivo_id' => $dispositivoId,
         ':ram_livre_mb'   => $ramLivreMb,
         ':disco_livre_gb' => $discoLivreGb,
-        ':alertas'        => $alertas
+        ':alertas'        => $alertasFinalJson
     ]);
 
     $pdo->commit();
     http_response_code(200);
-    echo json_encode(['status' => 'success', 'mensagem' => 'Dados de telemetria completos atualizados com sucesso.']);
+    echo json_encode(['status' => 'success', 'mensagem' => 'Telemetria e auditoria processadas com sucesso.']);
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) {

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 04-Ago-2026 às 02:52
+-- Tempo de geração: 06-Ago-2026 às 04:11
 -- Versão do servidor: 10.4.11-MariaDB
 -- versão do PHP: 7.4.1
 
@@ -126,6 +126,7 @@ CREATE TABLE `dispositivos` (
   `ram_clock_mhz` int(11) DEFAULT NULL,
   `ram_pentes` int(11) DEFAULT NULL,
   `disco_total_gb` int(11) DEFAULT NULL,
+  `discos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`discos`)),
   `usuario_id` int(11) DEFAULT NULL COMMENT 'Usuário principal ou dono do dispositivo',
   `setor_id` int(11) DEFAULT NULL COMMENT 'Setor onde o PC está alocado',
   `setor_nome` varchar(100) DEFAULT NULL,
@@ -136,12 +137,23 @@ CREATE TABLE `dispositivos` (
   `ultimo_acesso` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- --------------------------------------------------------
+
 --
--- Extraindo dados da tabela `dispositivos`
+-- Estrutura da tabela `dispositivos_hardware_original`
 --
 
-INSERT INTO `dispositivos` (`id`, `hostname`, `cpu_modelo`, `cpu_cores`, `cpu_threads`, `cpu_clock_mhz`, `cpu_socket`, `mobo_fabricante`, `mobo_modelo`, `bios_versao`, `gpu_modelo`, `gpu_vram_mb`, `ram_total_mb`, `ram_tipo`, `ram_clock_mhz`, `ram_pentes`, `disco_total_gb`, `usuario_id`, `setor_id`, `setor_nome`, `ip_local`, `mac_address`, `os_nome`, `primeiro_acesso`, `ultimo_acesso`) VALUES
-(212, 'Antonio', 'Intel(R) Celeron(R) CPU 5205U @ 1.90GHz', 0, 0, 0, '', '', '', '', 'Intel(R) UHD Graphics', 0, 3911, '', 0, 0, 0, NULL, 23, 'almoxerifado', '', '', '', '2026-08-03 20:32:23', '2026-08-03 20:49:30');
+CREATE TABLE `dispositivos_hardware_original` (
+  `id` int(11) NOT NULL,
+  `dispositivo_id` int(11) NOT NULL,
+  `cpu_modelo` varchar(255) DEFAULT NULL,
+  `ram_total_mb` int(11) DEFAULT NULL,
+  `ram_pentes` int(11) DEFAULT NULL,
+  `gpu_modelo` varchar(255) DEFAULT NULL,
+  `disco_total_gb` int(11) DEFAULT NULL,
+  `discos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`discos`)),
+  `criado_em` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
 
@@ -157,13 +169,6 @@ CREATE TABLE `dispositivos_telemetria` (
   `alertas` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Ex: ["CRITICAL_LOW_RAM", "CRITICAL_LOW_DISK"]' CHECK (json_valid(`alertas`)),
   `criado_em` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
---
--- Extraindo dados da tabela `dispositivos_telemetria`
---
-
-INSERT INTO `dispositivos_telemetria` (`id`, `dispositivo_id`, `ram_livre_mb`, `disco_livre_gb`, `alertas`, `criado_em`) VALUES
-(67, 212, 919, 0, '[\"O disco esta Quase cheio\"]', '2026-08-03 20:49:30');
 
 -- --------------------------------------------------------
 
@@ -205,7 +210,8 @@ INSERT INTO `secretarias_setores` (`id`, `nome`, `sigla`, `ativo`, `criado_em`) 
 (7, 'obras e postura', 'OP', 1, '2026-07-27 17:42:54'),
 (21, 'test11', 'TEST1', 1, '2026-08-03 19:16:05'),
 (22, 'Geral', 'GERAL', 1, '2026-08-03 19:16:09'),
-(23, 'almoxerifado', 'ALMOX', 1, '2026-08-03 19:57:58');
+(23, 'almoxerifado', 'ALMOX', 1, '2026-08-03 19:57:58'),
+(24, 'TI', 'TI', 1, '2026-08-05 23:35:59');
 
 -- --------------------------------------------------------
 
@@ -273,6 +279,13 @@ ALTER TABLE `dispositivos`
   ADD KEY `idx_setor_id` (`setor_id`);
 
 --
+-- Índices para tabela `dispositivos_hardware_original`
+--
+ALTER TABLE `dispositivos_hardware_original`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `dispositivo_id` (`dispositivo_id`);
+
+--
 -- Índices para tabela `dispositivos_telemetria`
 --
 ALTER TABLE `dispositivos_telemetria`
@@ -330,13 +343,19 @@ ALTER TABLE `chamados_respostas`
 -- AUTO_INCREMENT de tabela `dispositivos`
 --
 ALTER TABLE `dispositivos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=228;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=347;
+
+--
+-- AUTO_INCREMENT de tabela `dispositivos_hardware_original`
+--
+ALTER TABLE `dispositivos_hardware_original`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de tabela `dispositivos_telemetria`
 --
 ALTER TABLE `dispositivos_telemetria`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=68;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=71;
 
 --
 -- AUTO_INCREMENT de tabela `interacoes_chamado`
@@ -348,7 +367,7 @@ ALTER TABLE `interacoes_chamado`
 -- AUTO_INCREMENT de tabela `secretarias_setores`
 --
 ALTER TABLE `secretarias_setores`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT de tabela `usuarios`
@@ -381,6 +400,12 @@ ALTER TABLE `chamados_respostas`
 ALTER TABLE `dispositivos`
   ADD CONSTRAINT `fk_dispositivos_setores` FOREIGN KEY (`setor_id`) REFERENCES `secretarias_setores` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_dispositivos_usuarios` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL;
+
+--
+-- Limitadores para a tabela `dispositivos_hardware_original`
+--
+ALTER TABLE `dispositivos_hardware_original`
+  ADD CONSTRAINT `dispositivos_hardware_original_ibfk_1` FOREIGN KEY (`dispositivo_id`) REFERENCES `dispositivos` (`id`) ON DELETE CASCADE;
 
 --
 -- Limitadores para a tabela `dispositivos_telemetria`

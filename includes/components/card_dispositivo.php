@@ -155,6 +155,12 @@
 
         <div class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
             
+            <a href="dispositivos.php?aprovar_hardware=<?php echo $d['id']; ?>" 
+                onclick="return confirm('Deseja salvar a configuração atual como o novo Hardware Original do dispositivo?')"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition">
+                <i class="fa-solid fa-shield-check mr-1"></i> Aprovar / Recalibrar Hardware
+            </a>
+
             <div id="modalAlertasContainer" class="hidden">
                 <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-3">
                     <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg mt-0.5"></i>
@@ -198,7 +204,7 @@
                         <span id="modalGpu" class="text-sm font-medium text-slate-200">---</span>
                     </div>
                     <div>
-                        <span class="text-xs text-slate-500 block">Disco Principal (C:)</span>
+                        <span class="text-xs text-slate-500 block">Unidades de disco</span>
                         <span id="modalDisco" class="text-sm font-medium text-slate-200">---</span>
                     </div>
                 </div>
