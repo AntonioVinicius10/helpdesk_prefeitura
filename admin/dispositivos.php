@@ -6,7 +6,7 @@ if (!isset($_SESSION['usuario_id'])) {
     exit;
 }
 
-$usuarioNome = $_SESSION['usuario_nome'] ?? 'Usuário não identificado';
+$usuarioNome = $_SESSION['usuario_nome'] ?? $_SESSION['nome'] ?? $_SESSION['usuario'] ?? 'Usuário não identificado';
 $usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
 
 // 1. Corrige o fuso horário
@@ -79,14 +79,66 @@ if (isset($_GET['excluir_dispositivo'])) {
 
     if ($idExcluir > 0) {
         try {
-            $pdo->beginTransaction();
-            $stmtTelemetria = $pdo->prepare("DELETE FROM dispositivos_telemetria WHERE dispositivo_id = :id");
-            $stmtTelemetria->execute(['id' => $idExcluir]);
+            $sqlCreateTabela = "
+                CREATE TABLE IF NOT EXISTS computadores_excluidos (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    computador_id_original INT NULL COMMENT 'ID que o PC tinha na tabela principal',
+                    nome_computador VARCHAR(100) NOT NULL,
+                    numero_patrimonio VARCHAR(50) NULL,
+                    ip VARCHAR(45) NULL,
+                    mac_address VARCHAR(17) NULL,
+                    sistema_operacional VARCHAR(100) NULL,
+                    setor_nome VARCHAR(100) NULL COMMENT 'Setor onde o PC estava instalado',
+                    tecnico_id INT NULL COMMENT 'ID do técnico/admin que realizou a exclusão',
+                    tecnico_nome VARCHAR(150) NOT NULL COMMENT 'Nome registrado no momento da exclusão',
+                    motivo_exclusao TEXT NULL COMMENT 'Justificativa para remover o PC (ex: Sucateado, Doador de peças)',
+                    excluido_em DATETIME DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ";
+            $pdo->exec($sqlCreateTabela);
 
-            $stmtDispositivo = $pdo->prepare("DELETE FROM dispositivos WHERE id = :id");
-            $stmtDispositivo->execute(['id' => $idExcluir]);
+            $stmtDev = $pdo->prepare("SELECT d.*, s.nome AS setor_nome FROM dispositivos d LEFT JOIN secretarias_setores s ON d.setor_id = s.id WHERE d.id = :id LIMIT 1");
+            $stmtDev->execute(['id' => $idExcluir]);
+            $dev = $stmtDev->fetch(PDO::FETCH_ASSOC);
 
-            $pdo->commit();
+            if ($dev) {
+                $pdo->beginTransaction();
+
+                $sqlInsertExcluido = "
+                    INSERT INTO computadores_excluidos (
+                        computador_id_original, nome_computador, numero_patrimonio, ip, mac_address,
+                        sistema_operacional, setor_nome, tecnico_id, tecnico_nome, motivo_exclusao
+                    ) VALUES (
+                        :computador_id_original, :nome_computador, :numero_patrimonio, :ip, :mac_address,
+                        :sistema_operacional, :setor_nome, :tecnico_id, :tecnico_nome, :motivo_exclusao
+                    )
+                ";
+                $stmtInsertExcluido = $pdo->prepare($sqlInsertExcluido);
+
+                $stmtInsertExcluido->execute([
+                    ':computador_id_original' => (int)$dev['id'],
+                    ':nome_computador'        => $dev['hostname'] ?? 'Sem nome',
+                    ':numero_patrimonio'     => null,
+                    ':ip'                     => $dev['ip_local'] ?? null,
+                    ':mac_address'            => $dev['mac_address'] ?? null,
+                    ':sistema_operacional'    => $dev['os_nome'] ?? null,
+                    ':setor_nome'             => $dev['setor_nome'] ?? null,
+                    ':tecnico_id'             => $usuarioId,
+                    ':tecnico_nome'           => $usuarioNome,
+                    ':motivo_exclusao'        => 'Exclusão manual',
+                ]);
+
+                $stmtTelemetria = $pdo->prepare("DELETE FROM dispositivos_telemetria WHERE dispositivo_id = :id");
+                $stmtTelemetria->execute(['id' => $idExcluir]);
+
+                $stmtDispositivo = $pdo->prepare("DELETE FROM dispositivos WHERE id = :id");
+                $stmtDispositivo->execute(['id' => $idExcluir]);
+
+                $pdo->commit();
+            } else {
+                $mensagemErro = 'Dispositivo não encontrado para exclusão.';
+            }
+
             header('Location: dispositivos.php');
             exit;
         } catch (PDOException $e) {
@@ -272,7 +324,23 @@ $alerta_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'ale
         const usuarioNome = <?= json_encode($usuarioNome) ?>;
         let filtroAtual = 'todos';
 
+        function confirmarExclusao(id, hostname, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            const nome = hostname || 'este computador';
+            const mensagem = 'Deseja realmente excluir ' + nome + ' e registrar os dados na lista de computadores excluídos?';
+
+            if (confirm(mensagem)) {
+                window.location.href = 'dispositivos.php?excluir_dispositivo=' + id;
+            }
+        }
+
         function abrirModal(pc) {
+            window.pcAtual = pc;
+
             // Header Modal
             document.getElementById('modalHostname').innerText = pc.hostname;
             document.getElementById('modalStatus').innerText = 'Status: ' + pc.status.toUpperCase() + ' - ' + pc.uptime;
@@ -338,10 +406,23 @@ $alerta_pcs  = count(array_filter($dispositivos, fn($d) => $d['status'] === 'ale
 const linkAprovar = document.getElementById('linkAprovarHardware');
             if (linkAprovar) {
                 linkAprovar.href = '/helpdesk_prefeitura/admin/dispositivos.php?aprovar_hardware=' + pc.id;
-                linkAprovar.onclick = function () {
+                linkAprovar.onclick = function (event) {
                     const hostname = pc.hostname || 'este dispositivo';
                     const mensagem = 'Deseja salvar a configuração atual como o novo Hardware Original de ' + hostname + '?\n\nEsta ação será registrada para ' + usuarioNome + '.';
                     return confirm(mensagem);
+                };
+            }
+
+            const linkExcluir = document.getElementById('linkExcluirComputador');
+            if (linkExcluir) {
+                linkExcluir.href = '#';
+                linkExcluir.onclick = function (event) {
+                    event.preventDefault();
+                    const hostname = pc.hostname || 'este computador';
+                    const mensagem = 'Deseja realmente excluir ' + hostname + ' e registrar os dados na lista de computadores excluídos?';
+                    if (confirm(mensagem)) {
+                        window.location.href = 'dispositivos.php?excluir_dispositivo=' + pc.id;
+                    }
                 };
             }
 

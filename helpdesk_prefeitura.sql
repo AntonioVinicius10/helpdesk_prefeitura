@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 06-Ago-2026 às 04:11
+-- Tempo de geração: 11-Ago-2026 às 02:10
 -- Versão do servidor: 10.4.11-MariaDB
 -- versão do PHP: 7.4.1
 
@@ -105,6 +105,27 @@ INSERT INTO `chamados_respostas` (`id`, `chamado_id`, `usuario_id`, `mensagem`, 
 -- --------------------------------------------------------
 
 --
+-- Estrutura da tabela `computadores_excluidos`
+--
+
+CREATE TABLE `computadores_excluidos` (
+  `id` int(11) NOT NULL,
+  `computador_id_original` int(11) DEFAULT NULL COMMENT 'ID que o PC tinha na tabela principal',
+  `nome_computador` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `numero_patrimonio` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ip` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mac_address` varchar(17) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sistema_operacional` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `setor_nome` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Setor onde o PC estava instalado',
+  `tecnico_id` int(11) DEFAULT NULL COMMENT 'ID do técnico/admin que realizou a exclusão',
+  `tecnico_nome` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Nome registrado no momento da exclusão',
+  `motivo_exclusao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Justificativa para remover o PC (ex: Sucateado, Doador de peças)',
+  `excluido_em` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estrutura da tabela `dispositivos`
 --
 
@@ -137,6 +158,13 @@ CREATE TABLE `dispositivos` (
   `ultimo_acesso` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+--
+-- Extraindo dados da tabela `dispositivos`
+--
+
+INSERT INTO `dispositivos` (`id`, `hostname`, `cpu_modelo`, `cpu_cores`, `cpu_threads`, `cpu_clock_mhz`, `cpu_socket`, `mobo_fabricante`, `mobo_modelo`, `bios_versao`, `gpu_modelo`, `gpu_vram_mb`, `ram_total_mb`, `ram_tipo`, `ram_clock_mhz`, `ram_pentes`, `disco_total_gb`, `discos`, `usuario_id`, `setor_id`, `setor_nome`, `ip_local`, `mac_address`, `os_nome`, `primeiro_acesso`, `ultimo_acesso`) VALUES
+(459, 'antonio 10', 'Intel(R) Celeron(R) CPU 5205U @ 1.90GHz', 2, 2, 1896, 'U3E1', 'SAMSUNG ELECTRONICS CO., LTD.', 'NP550XCJ-KO1BR', 'P12RFH.054.220223.HC', 'Intel(R) UHD Graphics', 1024, 3911, 'DDR4', 2667, 1, 445, '[{\"unidade\":\"C:\",\"total_gb\":445.52,\"livre_gb\":296.51}]', NULL, 23, 'almoxerifado', '192.168.1.2', 'EC:63:D7:E9:29:E2', 'Microsoft Windows 11 Home Single Language (64 bits)', '2026-08-11 00:10:25', '2026-08-11 00:10:25');
+
 -- --------------------------------------------------------
 
 --
@@ -146,6 +174,7 @@ CREATE TABLE `dispositivos` (
 CREATE TABLE `dispositivos_hardware_original` (
   `id` int(11) NOT NULL,
   `dispositivo_id` int(11) NOT NULL,
+  `alterado_por` varchar(255) DEFAULT NULL,
   `cpu_modelo` varchar(255) DEFAULT NULL,
   `ram_total_mb` int(11) DEFAULT NULL,
   `ram_pentes` int(11) DEFAULT NULL,
@@ -154,6 +183,13 @@ CREATE TABLE `dispositivos_hardware_original` (
   `discos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`discos`)),
   `criado_em` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Extraindo dados da tabela `dispositivos_hardware_original`
+--
+
+INSERT INTO `dispositivos_hardware_original` (`id`, `dispositivo_id`, `alterado_por`, `cpu_modelo`, `ram_total_mb`, `ram_pentes`, `gpu_modelo`, `disco_total_gb`, `discos`, `criado_em`) VALUES
+(9, 459, NULL, 'Intel(R) Celeron(R) CPU 5205U @ 1.90GHz', 3911, 1, 'Intel(R) UHD Graphics', 445, '[{\"unidade\":\"C:\",\"total_gb\":445.52,\"livre_gb\":296.51}]', '2026-08-10 21:10:25');
 
 -- --------------------------------------------------------
 
@@ -169,6 +205,13 @@ CREATE TABLE `dispositivos_telemetria` (
   `alertas` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Ex: ["CRITICAL_LOW_RAM", "CRITICAL_LOW_DISK"]' CHECK (json_valid(`alertas`)),
   `criado_em` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Extraindo dados da tabela `dispositivos_telemetria`
+--
+
+INSERT INTO `dispositivos_telemetria` (`id`, `dispositivo_id`, `ram_livre_mb`, `disco_livre_gb`, `alertas`, `criado_em`) VALUES
+(75, 459, 618, 296, '[]', '2026-08-11 00:10:25');
 
 -- --------------------------------------------------------
 
@@ -270,6 +313,12 @@ ALTER TABLE `chamados_respostas`
   ADD KEY `usuario_id` (`usuario_id`);
 
 --
+-- Índices para tabela `computadores_excluidos`
+--
+ALTER TABLE `computadores_excluidos`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Índices para tabela `dispositivos`
 --
 ALTER TABLE `dispositivos`
@@ -340,22 +389,28 @@ ALTER TABLE `chamados_respostas`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
+-- AUTO_INCREMENT de tabela `computadores_excluidos`
+--
+ALTER TABLE `computadores_excluidos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
 -- AUTO_INCREMENT de tabela `dispositivos`
 --
 ALTER TABLE `dispositivos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=347;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=460;
 
 --
 -- AUTO_INCREMENT de tabela `dispositivos_hardware_original`
 --
 ALTER TABLE `dispositivos_hardware_original`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT de tabela `dispositivos_telemetria`
 --
 ALTER TABLE `dispositivos_telemetria`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=71;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=76;
 
 --
 -- AUTO_INCREMENT de tabela `interacoes_chamado`

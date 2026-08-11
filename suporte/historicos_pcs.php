@@ -8,7 +8,7 @@ if (!isset($_SESSION['usuario_id'])) {
 
 require_once __DIR__ . '/../config/conexao.php';
 
-$sql = "
+$sqlHistoricos = "
     SELECT h.id, h.dispositivo_id, h.alterado_por, h.criado_em, d.hostname
     FROM dispositivos_hardware_original h
     LEFT JOIN dispositivos d ON d.id = h.dispositivo_id
@@ -18,17 +18,25 @@ $sql = "
     ORDER BY h.criado_em DESC
 ";
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute();
-$historicos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmtHistoricos = $pdo->prepare($sqlHistoricos);
+$stmtHistoricos->execute();
+$historicos = $stmtHistoricos->fetchAll(PDO::FETCH_ASSOC);
 
-$nomesPcs = [];
-foreach ($historicos as $item) {
-    $nome = trim($item['hostname'] ?? '');
-    if ($nome !== '' && !in_array($nome, $nomesPcs, true)) {
-        $nomesPcs[] = $nome;
-    }
-}
+$sqlExcluidos = "
+    SELECT
+        id,
+        nome_computador,
+        sistema_operacional,
+        setor_nome,
+        tecnico_nome,
+        excluido_em
+    FROM computadores_excluidos
+    ORDER BY excluido_em DESC
+";
+
+$stmtExcluidos = $pdo->prepare($sqlExcluidos);
+$stmtExcluidos->execute();
+$computadoresExcluidos = $stmtExcluidos->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
@@ -46,34 +54,23 @@ foreach ($historicos as $item) {
         </div>
 
         <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 mb-6 shadow-lg">
-            <div class="flex items-center gap-2 mb-3">
+            <div class="flex items-center gap-2 mb-4">
                 <i class="fa-solid fa-desktop text-blue-400"></i>
-                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">PCs da lista</h2>
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Computadores modificados</h2>
             </div>
-            <div class="flex flex-wrap gap-2">
-                <?php if (!empty($nomesPcs)): ?>
-                    <?php foreach ($nomesPcs as $nome): ?>
-                        <span class="px-3 py-1.5 rounded-full text-sm border border-blue-500/30 bg-blue-500/10 text-blue-300">
-                            <?= htmlspecialchars($nome) ?>
-                        </span>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <span class="text-sm text-slate-500">Nenhum PC encontrado.</span>
-                <?php endif; ?>
-            </div>
-        </div>
 
-        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <input type="text" placeholder="Buscar por nome do PC..." class="w-full md:w-80 mb-4 px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm text-slate-200" onkeyup="filtrarLista(this.value, 'lista-modificados')">
+
             <?php if (empty($historicos)): ?>
                 <div class="text-center py-10">
                     <i class="fa-solid fa-folder-open text-4xl text-slate-600 mb-3"></i>
                     <p class="text-slate-400">Nenhum histórico de modificação encontrado.</p>
                 </div>
             <?php else: ?>
-                <ul class="space-y-3">
+                <ul id="lista-modificados" class="space-y-3">
                     <?php foreach ($historicos as $item): ?>
                         <?php $hostname = trim($item['hostname'] ?? ''); $alteradoPor = trim($item['alterado_por'] ?? ''); if ($hostname === '' || $alteradoPor === '') { continue; } ?>
-                        <li class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border border-slate-800 rounded-xl p-4 bg-slate-950/70">
+                        <li class="item-lista flex flex-col md:flex-row md:items-center md:justify-between gap-3 border border-slate-800 rounded-xl p-4 bg-slate-950/70" data-nome="<?= strtolower(htmlspecialchars($hostname, ENT_QUOTES, 'UTF-8')) ?>">
                             <div>
                                 <p class="font-semibold text-white">
                                     <?= htmlspecialchars($hostname) ?>
@@ -91,6 +88,79 @@ foreach ($historicos as $item) {
                 </ul>
             <?php endif; ?>
         </div>
+
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center gap-2 mb-4">
+                <i class="fa-solid fa-trash text-rose-400"></i>
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Computadores excluídos</h2>
+            </div>
+
+            <input type="text" placeholder="Buscar por nome do PC..." class="w-full md:w-80 mb-4 px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm text-slate-200" onkeyup="filtrarTabela(this.value, 'tabela-excluidos')">
+
+            <?php if (empty($computadoresExcluidos)): ?>
+                <div class="text-center py-10">
+                    <i class="fa-solid fa-folder-open text-4xl text-slate-600 mb-3"></i>
+                    <p class="text-slate-400">Nenhum computador excluído encontrado.</p>
+                </div>
+            <?php else: ?>
+                <div class="overflow-x-auto">
+                    <table id="tabela-excluidos" class="min-w-full text-sm text-left">
+                        <thead class="bg-slate-950/80 text-slate-300">
+                            <tr>
+                                <th class="px-3 py-2 font-semibold">Nome do computador</th>
+                                <th class="px-3 py-2 font-semibold">Sistema operacional</th>
+                                <th class="px-3 py-2 font-semibold">Setor</th>
+                                <th class="px-3 py-2 font-semibold">Excluído por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($computadoresExcluidos as $item): ?>
+                                <tr class="linha-tabela border-t border-slate-800" data-nome="<?= strtolower(htmlspecialchars($item['nome_computador'] ?? '-', ENT_QUOTES, 'UTF-8')) ?>">
+                                    <td class="px-3 py-3 text-white">
+                                        <?= htmlspecialchars($item['nome_computador'] ?? '-') ?>
+                                    </td>
+                                    <td class="px-3 py-3 text-slate-300">
+                                        <?= htmlspecialchars($item['sistema_operacional'] ?? '-') ?>
+                                    </td>
+                                    <td class="px-3 py-3 text-slate-300">
+                                        <?= htmlspecialchars($item['setor_nome'] ?? '-') ?>
+                                    </td>
+                                    <td class="px-3 py-3 text-slate-300">
+                                        <?= htmlspecialchars($item['tecnico_nome'] ?? '-') ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
     </div>
+
+    <script>
+        function filtrarLista(valor, idLista) {
+            const termo = valor.toLowerCase();
+            const lista = document.getElementById(idLista);
+            if (!lista) return;
+
+            const itens = lista.querySelectorAll('.item-lista');
+            itens.forEach(item => {
+                const nome = (item.getAttribute('data-nome') || '').toLowerCase();
+                item.style.display = nome.includes(termo) ? '' : 'none';
+            });
+        }
+
+        function filtrarTabela(valor, idTabela) {
+            const termo = valor.toLowerCase();
+            const tabela = document.getElementById(idTabela);
+            if (!tabela) return;
+
+            const linhas = tabela.querySelectorAll('.linha-tabela');
+            linhas.forEach(linha => {
+                const nome = (linha.getAttribute('data-nome') || '').toLowerCase();
+                linha.style.display = nome.includes(termo) ? '' : 'none';
+            });
+        }
+    </script>
 </body>
 </html>

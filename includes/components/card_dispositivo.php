@@ -87,7 +87,8 @@
                  data-hostname="<?= strtolower($pc['hostname']) ?>"
                  data-status="<?= $pc['status'] ?>"
                  onclick="abrirModal(<?= htmlspecialchars(json_encode($pc), ENT_QUOTES, 'UTF-8') ?>)">
-                
+
+               
                 <div>
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center gap-3">
@@ -154,22 +155,27 @@
         </div>
 
         <div class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-            
-            <a href="#" id="linkAprovarHardware"
-                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition inline-flex items-center">
-                <i class="fa-solid fa-shield-check mr-1"></i> Aprovar / Recalibrar Hardware
-            </a>
+            <div class="flex flex-wrap gap-2">
+                <a href="#" id="linkAprovarHardware"
+                   class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition inline-flex items-center">
+                    <i class="fa-solid fa-shield-check mr-1"></i> Aprovar / Recalibrar Hardware
+                </a>
 
-            <div id="modalAlertasContainer" class="hidden">
-                <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-3">
-                    <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg mt-0.5"></i>
-                    <div>
-                        <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Alertas Identificados</h4>
-                        <p id="modalAlertasTexto" class="text-xs text-slate-300 mt-0.5">---</p>
-                    </div>
+                <a href="#" id="linkExcluirComputador"
+                   class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition inline-flex items-center">
+                    <i class="fa-solid fa-trash mr-1"></i> Excluir Computador
+                </a>
+            </div>
+        
+        <div id="modalAlertasContainer" class="hidden">
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-3">
+                <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg mt-0.5"></i>
+                <div>
+                    <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Alertas Identificados</h4>
+                    <p id="modalAlertasTexto" class="text-xs text-slate-300 mt-0.5">---</p>
                 </div>
             </div>
-
+        </div>
             <div>
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <i class="fa-solid fa-microchip text-blue-400"></i> Processador & Placa-Mãe
