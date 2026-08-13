@@ -76,4 +76,13 @@
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger">
+            <div class="card-body">
+                <h5 class="card-title">Casdastrar chamados </h5>
+                <p class="card-text">Cadastre chamados </p>
+             <a href="/helpdesk_prefeitura/suporte/cadastro_chamados.php" class="btn btn-danger btn-sm">Acesse o Casdastro</a>
+            </div>
+        </div>
+    </div>
 </div>
