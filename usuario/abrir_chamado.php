@@ -10,6 +10,15 @@ if (!isset($_SESSION['usuario_id'])) {
 
 $mensagemSucesso = '';
 $mensagemErro = '';
+// Valores padrão para evitar "undefined variable" ao carregar a página
+$titulo = '';
+$categoria_id = '';
+$prioridade = 'baixa';
+$descricao = '';
+$tipoSolicitante = 'eu';
+$usuarioSolicitanteTexto = '';
+$lugar = '';
+$err_titulo = $err_categoria = $err_descricao = $err_usuarioSolicitanteText = $err_prioridade = $err_local = false;
 
 // 2. BUSCAR AS CATEGORIAS ATIVAS NO BANCO
 try {
@@ -32,10 +41,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario_chamado_id   = $usuario_id;
     $outroUsuario = null;
 
-    if (empty($titulo) || empty($categoria_id) || empty($descricao)) {
+    // Flags de erro por campo (para feedback inline)
+    $err_titulo = $err_categoria = $err_descricao = $err_usuarioSolicitanteText = $err_prioridade = $err_local = false;
+
+    // Validação servidor: marca campos específicos
+    $missing = [];
+    if (empty($titulo)) { $err_titulo = true; $missing[] = 'titulo'; }
+    if (empty($categoria_id)) { $err_categoria = true; $missing[] = 'categoria'; }
+    if (empty($descricao)) { $err_descricao = true; $missing[] = 'descricao'; }
+
+    // Valida prioridade (deve ser uma das opções permitidas)
+    $prioridades_validas = ['baixa','media','alta'];
+    if (empty($prioridade) || !in_array($prioridade, $prioridades_validas, true)) { $err_prioridade = true; $missing[] = 'prioridade'; }
+
+    // Valida lugar como obrigatório (avisos solicitados)
+    if (empty($lugar)) { $err_local = true; $missing[] = 'local'; }
+
+    if (!empty($missing)) {
         $mensagemErro = "Por favor, preencha todos os campos obrigatórios (*).";
-    } elseif ($tipoSolicitante === 'outro') {
+    }
+
+    if ($tipoSolicitante === 'outro') {
         if (empty($usuarioSolicitanteTexto)) {
+            $err_usuarioSolicitanteText = true;
             $mensagemErro = "Digite o nome da pessoa para quem o chamado será aberto.";
         } else {
             $outroUsuario = $usuarioSolicitanteTexto;
@@ -124,7 +152,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php else: ?>
 
-                <form action="abrir_chamado.php" method="POST">
+                <form id="form-chamado" action="abrir_chamado.php" method="POST" novalidate>
+                    <div id="alert-js"></div>
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold">Este chamado é para *</label>
@@ -146,46 +175,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="mb-3" id="bloco-outra-pessoa" style="<?= (($tipoSolicitante ?? 'eu') === 'outro') ? '' : 'display:none;' ?>">
                         <label for="usuario_solicitante_texto" class="form-label fw-bold">Quem precisa do chamado? *</label>
-                        <input type="text" name="usuario_solicitante_texto" id="usuario_solicitante_texto" class="form-control"
+                        <input type="text" name="usuario_solicitante_texto" id="usuario_solicitante_texto" class="form-control <?= (!empty($err_usuarioSolicitanteText) ? 'is-invalid' : '') ?>"
                                placeholder="Digite o nome ou e-mail da pessoa"
                                value="<?= htmlspecialchars($usuarioSolicitanteTexto ?? '') ?>">
+                        <div class="invalid-feedback" id="feedback-usuario">Informe o nome ou e-mail da pessoa.</div>
                         <div class="form-text">Digite o nome ou e-mail da pessoa para quem o chamado deve ser aberto.</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="titulo" class="form-label fw-bold">Assunto / Título da Solicitação *</label>
-                        <input type="text" name="titulo" id="titulo" class="form-control" required 
-                               placeholder="Ex: Computador não liga / Impressora sem papel">
+                        <input type="text" name="titulo" id="titulo" class="form-control <?= (!empty($err_titulo) ? 'is-invalid' : '') ?>" required 
+                               placeholder="Ex: Computador não liga / Impressora sem papel"
+                               value="<?= htmlspecialchars($titulo ?? '') ?>">
+                        <div class="invalid-feedback" id="feedback-titulo">Preencha o Assunto / Título.</div>
                     </div>
                     <div class="mb-3">
-                        <label for="local" class="form-label fw-bold">Lugar</label>
-                        <input type="text" name="local" id="local" class="form-control"
-                               placeholder="Ex: Sala da Diretoria / Secretaria de Educação">
+                        <label for="local" class="form-label fw-bold">Lugar *</label>
+                        <input type="text" name="local" id="local" class="form-control <?= (!empty($err_local) ? 'is-invalid' : '') ?>" 
+                               placeholder="Ex: Sala da Diretoria / Secretaria de Educação"
+                               value="<?= htmlspecialchars($lugar ?? '') ?>">
+                        <div class="invalid-feedback" id="feedback-local">Informe o local do atendimento.</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="categoria_id" class="form-label fw-bold">Categoria do Problema *</label>
-                        <select name="categoria_id" id="categoria_id" class="form-select" required>
-                            <option value="" selected disabled>Selecione uma categoria...</option>
+                        <select name="categoria_id" id="categoria_id" class="form-select <?= (!empty($err_categoria) ? 'is-invalid' : '') ?>" required>
+                            <option value="" disabled <?= empty($categoria_id) ? 'selected' : '' ?>>Selecione uma categoria...</option>
                             <?php foreach ($categorias as $cat): ?>
-                                <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['nome']) ?></option>
+                                <option value="<?= $cat['id'] ?>" <?= ((string)($categoria_id ?? '') === (string)$cat['id']) ? 'selected' : '' ?>><?= htmlspecialchars($cat['nome']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <div class="invalid-feedback" id="feedback-categoria">Selecione a Categoria do Problema.</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="prioridade" class="form-label fw-bold">Prioridade *</label>
-                        <select name="prioridade" id="prioridade" class="form-select" required>
-                            <option value="baixa" selected>Baixa (Dúvida, ajuste simples)</option>
-                            <option value="media">Média (Atrapalha a rotina)</option>
-                            <option value="alta">Alta (Setor parado ou urgente)</option>
+                        <select name="prioridade" id="prioridade" class="form-select <?= (!empty($err_prioridade) ? 'is-invalid' : '') ?>" required>
+                            <option value="baixa" <?= ($prioridade === 'baixa') ? 'selected' : '' ?>>Baixa (Dúvida, ajuste simples)</option>
+                            <option value="media" <?= ($prioridade === 'media') ? 'selected' : '' ?>>Média (Atrapalha a rotina)</option>
+                            <option value="alta" <?= ($prioridade === 'alta') ? 'selected' : '' ?>>Alta (Setor parado ou urgente)</option>
                         </select>
+                        <div class="invalid-feedback" id="feedback-prioridade">Selecione a Prioridade.</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="descricao" class="form-label fw-bold">Descrição do Problema *</label>
-                        <textarea name="descricao" id="descricao" class="form-control" rows="5" required 
-                                  placeholder="Descreva detalhadamente o que está acontecendo..."></textarea>
+                        <textarea name="descricao" id="descricao" class="form-control <?= (!empty($err_descricao) ? 'is-invalid' : '') ?>" rows="5" required 
+                                  placeholder="Descreva detalhadamente o que está acontecendo..."><?= htmlspecialchars($descricao ?? '') ?></textarea>
+                        <div class="invalid-feedback" id="feedback-descricao">Descreva o problema.</div>
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center mt-4">
@@ -208,6 +245,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const tipoOutro = document.getElementById('tipo_outro');
             const blocoOutraPessoa = document.getElementById('bloco-outra-pessoa');
             const inputUsuario = document.getElementById('usuario_solicitante_texto');
+            const form = document.getElementById('form-chamado');
+            const alertJs = document.getElementById('alert-js');
 
             function atualizarBloco() {
                 const mostrar = tipoOutro.checked;
@@ -215,6 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (!mostrar && inputUsuario) {
                     inputUsuario.value = '';
+                    inputUsuario.classList.remove('is-invalid');
                 }
             }
 
@@ -222,6 +262,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 tipoEu.addEventListener('change', atualizarBloco);
                 tipoOutro.addEventListener('change', atualizarBloco);
                 atualizarBloco();
+            }
+
+            // Remove marcação de erro ao digitar/selecionar
+            ['titulo','categoria_id','prioridade','descricao','usuario_solicitante_texto','local'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', function () {
+                    this.classList.remove('is-invalid');
+                    if (alertJs) alertJs.innerHTML = '';
+                });
+                el.addEventListener('change', function () {
+                    this.classList.remove('is-invalid');
+                    if (alertJs) alertJs.innerHTML = '';
+                });
+            });
+
+            if (form) {
+                form.addEventListener('submit', function (e) {
+                    // Limpa alertas e feedbacks anteriores
+                    if (alertJs) alertJs.innerHTML = '';
+                    ['feedback-titulo','feedback-categoria','feedback-prioridade','feedback-descricao','feedback-usuario','feedback-local'].forEach(id => {
+                        const f = document.getElementById(id);
+                        if (f) f.textContent = '';
+                    });
+
+                    const titulo = (document.getElementById('titulo') || {}).value || '';
+                    const categoria = (document.getElementById('categoria_id') || {}).value || '';
+                    const prioridade = (document.getElementById('prioridade') || {}).value || '';
+                    const descricao = (document.getElementById('descricao') || {}).value || '';
+                    const local = (document.getElementById('local') || {}).value || '';
+                    const outroChecked = document.getElementById('tipo_outro') ? document.getElementById('tipo_outro').checked : false;
+                    const usuarioSolicitante = (document.getElementById('usuario_solicitante_texto') || {}).value || '';
+
+                    const errors = [];
+
+                    if (!titulo.trim()) {
+                        errors.push('Preencha o Assunto / Título.');
+                        const el = document.getElementById('titulo'); if (el) el.classList.add('is-invalid');
+                        const fb = document.getElementById('feedback-titulo'); if (fb) fb.textContent = 'Preencha o Assunto / Título.';
+                    }
+                    if (!categoria) {
+                        errors.push('Selecione a Categoria do Problema.');
+                        const el = document.getElementById('categoria_id'); if (el) el.classList.add('is-invalid');
+                        const fb = document.getElementById('feedback-categoria'); if (fb) fb.textContent = 'Selecione a Categoria do Problema.';
+                    }
+                    if (!prioridade) {
+                        errors.push('Selecione a Prioridade.');
+                        const el = document.getElementById('prioridade'); if (el) el.classList.add('is-invalid');
+                        const fb = document.getElementById('feedback-prioridade'); if (fb) fb.textContent = 'Selecione a Prioridade.';
+                    }
+                    if (!local.trim()) {
+                        errors.push('Informe o local do atendimento.');
+                        const el = document.getElementById('local'); if (el) el.classList.add('is-invalid');
+                        const fb = document.getElementById('feedback-local'); if (fb) fb.textContent = 'Informe o local do atendimento.';
+                    }
+                    if (!descricao.trim()) {
+                        errors.push('Descreva o problema.');
+                        const el = document.getElementById('descricao'); if (el) el.classList.add('is-invalid');
+                        const fb = document.getElementById('feedback-descricao'); if (fb) fb.textContent = 'Descreva o problema.';
+                    }
+                    if (outroChecked && !usuarioSolicitante.trim()) {
+                        errors.push('Informe quem receberá o chamado.');
+                        const el = document.getElementById('usuario_solicitante_texto'); if (el) el.classList.add('is-invalid');
+                        const fb = document.getElementById('feedback-usuario'); if (fb) fb.textContent = 'Informe quem receberá o chamado.';
+                    }
+
+                    if (errors.length) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (alertJs) {
+                            alertJs.innerHTML = '<div class="alert alert-danger py-2">' + errors[0] + '</div>';
+                            alertJs.scrollIntoView({behavior: 'smooth'});
+                        }
+                        return false;
+                    }
+
+                    return true; // permite envio
+                });
             }
         });
     </script>
