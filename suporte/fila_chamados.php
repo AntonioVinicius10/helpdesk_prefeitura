@@ -12,12 +12,24 @@ $mensagemErro = '';
 
 // 2. BUSCAR TODOS OS CHAMADOS ORDENADOS POR STATUS E DATA
 try {
+    $verificaColunaOutro = $pdo->query("SHOW COLUMNS FROM chamados LIKE 'outro_usuario'");
+    if ($verificaColunaOutro->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE chamados ADD COLUMN outro_usuario VARCHAR(255) DEFAULT NULL");
+    }
+
+    $verificaColunaLugar = $pdo->query("SHOW COLUMNS FROM chamados LIKE 'lugar'");
+    if ($verificaColunaLugar->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE chamados ADD COLUMN lugar VARCHAR(255) DEFAULT NULL");
+    }
+
     $sql = "SELECT 
                 c.id, 
                 c.titulo, 
                 c.status, 
                 c.prioridade, 
                 c.criado_em,
+                c.outro_usuario,
+                c.lugar,
                 u.nome AS solicitante_nome, 
                 u.email AS solicitante_email,
                 s.nome AS setor_nome, 
@@ -86,6 +98,8 @@ try {
                             <tr>
                                 <th># ID</th>
                                 <th>Solicitante (Quem abriu)</th>
+                                <th>Quem precisa</th>
+                                <th>Lugar</th>
                                 <th>Setor / Secretaria</th>
                                 <th>Assunto</th>
                                 <th>Situação</th>
@@ -102,6 +116,14 @@ try {
                                         <td>
                                             <strong><?= htmlspecialchars($chamado['solicitante_nome']) ?></strong><br>
                                             <small class="text-muted"><?= htmlspecialchars($chamado['solicitante_email']) ?></small>
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(!empty($chamado['outro_usuario']) ? $chamado['outro_usuario'] : '-') ?>
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(!empty($chamado['lugar']) ? $chamado['lugar'] : '-') ?>
                                         </td>
 
                                         <td>
@@ -138,7 +160,7 @@ try {
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">Nenhum chamado encontrado na fila.</td>
+                                    <td colspan="9" class="text-center py-4 text-muted">Nenhum chamado encontrado na fila.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
