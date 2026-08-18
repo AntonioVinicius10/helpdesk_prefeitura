@@ -47,6 +47,28 @@
                 </div>
             </div>
         </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div>
+                        <h5 class="card-title">Históricos de Pcs</h5>
+                        <p class="card-text">Veja os historicos e o que foi apagado e alterado </p>
+                    </div>
+                    <a href="/helpdesk_prefeitura/suporte/historicos_pcs.php" class="btn btn-danger btn-sm w-100 mt-3">Ver Relatórios</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div>
+                        <h5 class="card-title">Cadastrar Chamados</h5>
+                        <p class="card-text">Cadastre novos chamados para os usuários.</p>
+                    </div>
+                    <a href="/helpdesk_prefeitura/suporte/cadastro_chamados.php" class="btn btn-danger btn-sm w-100 mt-3">Cadastrar Chamado</a>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
